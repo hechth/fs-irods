@@ -4,61 +4,34 @@
 # - https://www.python.org/dev/peps/pep-0621/
 
 [build-system]
-requires = ["setuptools>=64.0.0", "setuptools-scm", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
 
-[project]
-authors = [
-    { name = "Helge Hecht", email = "helge.hecht@recetox.muni.cz" }
-]
-classifiers = [
-    "Development Status :: 2 - Pre-Alpha",
-    "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
-    "Natural Language :: English",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-]
-dependencies = []
+[tool.poetry]
+name = "fs-irods"
+version = "0.1.0"
 description = "PyFilesystem2 extension for iRODS"
+authors = ["Helge Hecht <helge.hecht@recetox.muni.cz>"]
+readme = "README.md"
+packages = [{include = "fs_irods"}]
 keywords = [
     "PyFilesystem2",
     "iRODS",
 ]
-license = {file = "LICENSE"}
-name = "fs_irods"
-readme = {file = "README.md", content-type = "text/markdown"}
-requires-python = ">=3.8"
-version = "0.1.0"
+license = "MIT"
 
-[project.optional-dependencies]
-dev = [
-    "build",  # build is not only used in publishing (below), but also in the template's test suite
-    "bump2version",
-    "coverage [toml]",
-    "pytest",
-    "pytest-cov",
-    "ruff",
-    "sphinx",
-    "sphinx_rtd_theme",
-    "sphinx-autoapi",
-    "tox",
-    "myst_parser",
-]
-publishing = [
-    "build",
-    "twine",
-    "wheel",
-]
+[tool.poetry.dependencies]
+python = "^3.8"
+fs = "^2.4.16"
+python-irodsclient = "^1.1.9"
 
-[project.urls]
-Repository = "https://github.com/hechth/fs-irods"
-Issues = "https://github.com/hechth/fs-irods/issues"
-Changelog = "https://github.com/hechth/fs-irods/CHANGELOG.md"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.3"
+pytest-cov = "^4.1.0"
+twine = "^4.0.2"
+build = "^1.0.3"
+ruff = "^0.1.5"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -76,20 +49,6 @@ known_first_party = "fs_irods"
 src_paths = ["fs_irods", "tests"]
 line_length = 120
 
-# For completeness, until we move to an src-based layout
-[tool.setuptools.packages.find]
-include = ["fs_irods*"]
-exclude = ["tests*"]
-
-[tool.tox]
-legacy_tox_ini = """
-[tox]
-envlist = py38,py39,py310,py311,py312
-skip_missing_interpreters = true
-[testenv]
-commands = pytest
-extras = dev
-"""
 
 [tool.ruff]
 # Enable Pyflakes `E` and `F` codes by default.
