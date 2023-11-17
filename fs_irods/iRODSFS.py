@@ -1,12 +1,33 @@
 from io import IOBase
+from multiprocessing import RLock
 from fs.base import FS
 from fs.info import Info
 from fs.permissions import Permissions
+from fs.errors import DirectoryExists, ResourceNotFound
+
+from irods.session import iRODSSession
+from irods.collection import iRODSCollection
+
+from contextlib import contextmanager
+
+from fs_irods.utils import can_create
 
 class iRODSFS(FS):
-
-    def __init__(self) -> None:
+    def __init__(self, host: str, port:int, user:str, password: str) -> None:
         super().__init__()
+        self._lock = RLock()
+        self._host = host
+        self._port = port
+        self._user = user
+        self._password = password
+        
+
+    @contextmanager
+    def _session(self) -> iRODSSession:
+        with self._lock:
+            with iRODSSession(host=self._host, port=self._port, user=self._user, password=self._password) as session:
+                yield session
+        
 
     def getinfo(self, path: str, namespaces: list|None = None) -> Info:
         """Get information about a resource on the filesystem.
@@ -33,7 +54,9 @@ class iRODSFS(FS):
             ResourceNotFound: If the path does not exist.
             DirectoryExpected: If the path is not a directory.
         """
-        raise NotImplementedError()
+        with self._session() as session:
+            coll: iRODSCollection = session.collections.get(path)
+            return [item.name for item in coll.items]
 
     def makedir(self, path: str, permissions: Permissions|None = None, recreate: bool = False):
         """Make a directory on the filesystem.
@@ -49,7 +72,11 @@ class iRODSFS(FS):
                 recreate is False.
             ResourceNotFound: If the path does not exist.
         """
-        raise NotImplementedError()
+        with self._session() as session:
+            if session.collections.exists(path) and not recreate:
+                raise DirectoryExists(path)
+            
+            session.collections.create(path, recurse=False)
     
     def openbin(self, path: str, mode:str = "r", buffering: int = -1, **options) -> IOBase:
         """Open a binary file-like object on the filesystem.
@@ -70,7 +97,11 @@ class iRODSFS(FS):
             FileExpected: If the path is not a file.
             FileExists: If the path exists, and exclusive mode is specified (x in the mode).
         """
-        raise NotImplementedError()
+        with self._session() as session:
+            if not session.data_objects.exists(path) and not can_create(mode):
+                raise ResourceNotFound(path)
+            
+            return session.data_objects.open(path, mode, **options)
     
     def remove(self, path: str):
         """Remove a file from the filesystem.
