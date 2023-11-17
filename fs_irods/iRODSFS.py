@@ -3,7 +3,7 @@ from multiprocessing import RLock
 from fs.base import FS
 from fs.info import Info
 from fs.permissions import Permissions
-from fs.errors import DirectoryExists, ResourceNotFound
+from fs.errors import DirectoryExists, ResourceNotFound, RemoveRootError, DirectoryExpected, FileExpected
 
 from irods.session import iRODSSession
 from irods.collection import iRODSCollection
@@ -42,7 +42,18 @@ class iRODSFS(FS):
         Raises:
             ResourceNotFound: If the path does not exist.
         """
-        raise NotImplementedError()
+        self._check_resource_exists(path)
+
+        with self._session() as session:
+            info = Info({"basic": {"name": path}})
+            if session.data_objects.exists(path):
+                info["basic"]["is_dir"] = False
+                info["details"] = {"type": "file"}
+            elif session.collections.exists(path):
+                info["basic"]["is_dir"] = True
+                info["details"] = {"type": "directory"}
+            
+            return info
     
     def listdir(self, path: str) -> list:
         """List a directory on the filesystem.
@@ -111,7 +122,13 @@ class iRODSFS(FS):
             ResourceNotFound: If the path does not exist.
             FileExpected: If the path is not a file.
         """
-        raise NotImplementedError()
+        with self._session() as session:
+            if not session.data_objects.exists(path):
+                raise ResourceNotFound(path)
+            if not self.isfile(path):
+                raise FileExpected(path)
+            
+            session.data_objects.unlink(path)
     
     def removedir(self, path: str):
         """Remove a directory from the filesystem.
@@ -120,8 +137,17 @@ class iRODSFS(FS):
         Raises:
             ResourceNotFound: If the path does not exist.
             DirectoryExpected: If the path is not a directory.
+            RemoveRootError: If the path is the root directory.
         """
-        raise NotImplementedError()
+        with self._session() as session:
+            if not session.collections.exists(path):
+                raise ResourceNotFound(path)
+            if not self.isdir(path):
+                raise DirectoryExpected(path)
+            if path == "/":
+                raise RemoveRootError()
+            
+            session.collections.remove(path, recurse=False)
     
     def setinfo(self, path: str, info: dict) -> None:
         """Set information about a resource on the filesystem.
@@ -131,4 +157,36 @@ class iRODSFS(FS):
         Raises:
             ResourceNotFound: If the path does not exist.
         """
+        self._check_resource_exists(path)           
         raise NotImplementedError()
+
+    def _check_resource_exists(self, path):
+        """Check if a resource exists.
+        Args:
+            path (str): A path to a resource on the filesystem.
+        Raises:
+            ResourceNotFound: If the path does not exist.
+        """
+        with self._session() as session:
+            if not session.data_objects.exists(path) and not session.collections.exists(path):
+                raise ResourceNotFound(path)
+    
+    def isfile(self, path: str) -> bool:
+        """Check if a path is a file.
+        Args:
+            path (str): A path to a resource on the filesystem.
+        Returns:
+            bool: True if the path is a file, False otherwise.
+        """
+        with self._session() as session:
+            return session.data_objects.exists(path)
+        
+    def isdir(self, path: str) -> bool:
+        """Check if a path is a directory.
+        Args:
+            path (str): A path to a resource on the filesystem.
+        Returns:
+            bool: True if the path is a directory, False otherwise.
+        """
+        with self._session() as session:
+            return session.collections.exists(path)
