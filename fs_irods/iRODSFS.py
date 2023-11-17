@@ -13,19 +13,20 @@ from contextlib import contextmanager
 from fs_irods.utils import can_create
 
 class iRODSFS(FS):
-    def __init__(self, host: str, port:int, user:str, password: str) -> None:
+    def __init__(self, host: str, port:int, user:str, password: str, zone: str) -> None:
         super().__init__()
         self._lock = RLock()
         self._host = host
         self._port = port
         self._user = user
         self._password = password
+        self._zone = zone
         
 
     @contextmanager
     def _session(self) -> iRODSSession:
         with self._lock:
-            with iRODSSession(host=self._host, port=self._port, user=self._user, password=self._password) as session:
+            with iRODSSession(host=self._host, port=self._port, user=self._user, password=self._password, zone=self._zone) as session:
                 yield session
         
 
