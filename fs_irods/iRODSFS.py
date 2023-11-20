@@ -109,10 +109,12 @@ class iRODSFS(FS):
             FileExpected: If the path is not a file.
             FileExists: If the path exists, and exclusive mode is specified (x in the mode).
         """
+        if self.isdir(path):
+            raise FileExpected(path)
         with self._session() as session:
             if not session.data_objects.exists(path) and not can_create(mode):
                 raise ResourceNotFound(path)
-            
+          
             return session.data_objects.open(path, mode, **options)
     
     def remove(self, path: str):
