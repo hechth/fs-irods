@@ -3,10 +3,12 @@ from multiprocessing import RLock
 from fs.base import FS
 from fs.info import Info
 from fs.permissions import Permissions
-from fs.errors import DirectoryExists, ResourceNotFound, RemoveRootError, DirectoryExpected, FileExpected
+from fs.errors import DirectoryExists, ResourceNotFound, RemoveRootError, DirectoryExpected, FileExpected, FileExists
 
 from irods.session import iRODSSession
 from irods.collection import iRODSCollection
+from irods.path import iRODSPath
+import irods.test.helpers as h
 
 from contextlib import contextmanager
 
@@ -21,6 +23,9 @@ class iRODSFS(FS):
         self._user = user
         self._password = password
         self._zone = zone
+
+    def _wrap(self, path: str) -> str:
+        return str(iRODSPath(self._zone, path))
         
 
     @contextmanager
@@ -43,18 +48,18 @@ class iRODSFS(FS):
         Raises:
             ResourceNotFound: If the path does not exist.
         """
-        self._check_resource_exists(path)
+        self._assert_exists(path)
 
         with self._session() as session:
-            info = Info({"basic": {"name": path}})
-            if session.data_objects.exists(path):
-                info["basic"]["is_dir"] = False
-                info["details"] = {"type": "file"}
-            elif session.collections.exists(path):
-                info["basic"]["is_dir"] = True
-                info["details"] = {"type": "directory"}
-            
-            return info
+            raw_info = {"basic": {"name": path}}
+            if session.data_objects.exists(self._wrap(path)):
+                raw_info["basic"]["is_dir"] = False
+                raw_info["details"] = {"type": "file"}
+            elif session.collections.exists(self._wrap(path)):
+                raw_info["basic"]["is_dir"] = True
+                raw_info["details"] = {"type": "directory"}
+          
+            return Info(raw_info)
     
     def listdir(self, path: str) -> list:
         """List a directory on the filesystem.
@@ -66,9 +71,10 @@ class iRODSFS(FS):
             ResourceNotFound: If the path does not exist.
             DirectoryExpected: If the path is not a directory.
         """
+        self._assert_exists(path)
         with self._session() as session:
-            coll: iRODSCollection = session.collections.get(path)
-            return [item.name for item in coll.items]
+            coll: iRODSCollection = session.collections.get(self._wrap(path))
+            return [item.path for item in coll.data_objects]
 
     def makedir(self, path: str, permissions: Permissions|None = None, recreate: bool = False):
         """Make a directory on the filesystem.
@@ -85,10 +91,10 @@ class iRODSFS(FS):
             ResourceNotFound: If the path does not exist.
         """
         with self._session() as session:
-            if session.collections.exists(path) and not recreate:
+            if session.collections.exists(self._wrap(path)) and not recreate:
                 raise DirectoryExists(path)
             
-            session.collections.create(path, recurse=False)
+            session.collections.create(self._wrap(path), recurse=False)
     
     def openbin(self, path: str, mode:str = "r", buffering: int = -1, **options) -> IOBase:
         """Open a binary file-like object on the filesystem.
@@ -112,10 +118,13 @@ class iRODSFS(FS):
         if self.isdir(path):
             raise FileExpected(path)
         with self._session() as session:
-            if not session.data_objects.exists(path) and not can_create(mode):
-                raise ResourceNotFound(path)
-          
-            return session.data_objects.open(path, mode, **options)
+            if not session.data_objects.exists(self._wrap(path)):
+                if not can_create(mode):
+                    raise ResourceNotFound(path)
+                session.data_objects.create(self._wrap(path))
+            
+            mode = mode.replace("b", "")          
+            return session.data_objects.open(self._wrap(path), mode, **options)
     
     def remove(self, path: str):
         """Remove a file from the filesystem.
@@ -125,13 +134,12 @@ class iRODSFS(FS):
             ResourceNotFound: If the path does not exist.
             FileExpected: If the path is not a file.
         """
+        self._assert_exists(path)
         with self._session() as session:
-            if not session.data_objects.exists(path):
-                raise ResourceNotFound(path)
             if not self.isfile(path):
                 raise FileExpected(path)
             
-            session.data_objects.unlink(path)
+            session.data_objects.unlink(self._wrap(path))
     
     def removedir(self, path: str):
         """Remove a directory from the filesystem.
@@ -143,14 +151,14 @@ class iRODSFS(FS):
             RemoveRootError: If the path is the root directory.
         """
         with self._session() as session:
-            if not session.collections.exists(path):
+            if not session.collections.exists(self._wrap(path)):
                 raise ResourceNotFound(path)
             if not self.isdir(path):
                 raise DirectoryExpected(path)
             if path == "/":
                 raise RemoveRootError()
             
-            session.collections.remove(path, recurse=False)
+            session.collections.remove(self._wrap(path), recurse=False)
     
     def setinfo(self, path: str, info: dict) -> None:
         """Set information about a resource on the filesystem.
@@ -160,10 +168,11 @@ class iRODSFS(FS):
         Raises:
             ResourceNotFound: If the path does not exist.
         """
-        self._check_resource_exists(path)           
+        path = self._wrap(path)
+        self.exists(path)           
         raise NotImplementedError()
 
-    def _check_resource_exists(self, path):
+    def _assert_exists(self, path:str):
         """Check if a resource exists.
         Args:
             path (str): A path to a resource on the filesystem.
@@ -171,7 +180,7 @@ class iRODSFS(FS):
             ResourceNotFound: If the path does not exist.
         """
         with self._session() as session:
-            if not session.data_objects.exists(path) and not session.collections.exists(path):
+            if not session.data_objects.exists(self._wrap(path)) and not session.collections.exists(self._wrap(path)):
                 raise ResourceNotFound(path)
     
     def isfile(self, path: str) -> bool:
@@ -180,9 +189,9 @@ class iRODSFS(FS):
             path (str): A path to a resource on the filesystem.
         Returns:
             bool: True if the path is a file, False otherwise.
-        """
+        """       
         with self._session() as session:
-            return session.data_objects.exists(path)
+            return session.data_objects.exists(self._wrap(path))
         
     def isdir(self, path: str) -> bool:
         """Check if a path is a directory.
@@ -192,4 +201,43 @@ class iRODSFS(FS):
             bool: True if the path is a directory, False otherwise.
         """
         with self._session() as session:
-            return session.collections.exists(path)
+            return session.collections.exists(self._wrap(path))
+
+    def create(self, path:str):
+        """Create a file on the filesystem.
+        Args:
+            path (str): A path to a file on the filesystem.
+        Raises:
+            ResourceNotFound: If any ancestor of path does not exist.
+            FileExists: If the path exists.
+        """
+        with self._session() as session:
+            if session.data_objects.exists(self._wrap(path)):
+                raise FileExists(path)
+            session.data_objects.create(self._wrap(path))
+
+    def exists(self, path: str) -> bool:
+        """Check if a resource exists.
+        Args:
+            path (str): A path to a resource on the filesystem.
+        Returns:
+            bool: True if the path exists, False otherwise.
+        """
+        with self._session() as session:
+            return session.data_objects.exists(self._wrap(path)) or session.collections.exists(self._wrap(path))
+        
+    def clean(self):
+        """Clean up the filesystem.
+        """
+        with self._session() as session:
+            root_collection = session.collections.get(self._wrap(""))
+
+            def delete_all(collection):
+                for data_object in collection.data_objects:
+                    data_object.unlink(force=True)
+                for subcollection in collection.subcollections:
+                    if subcollection.name not in ["home", "trash", ""]:
+                        delete_all(subcollection)
+                        subcollection.remove(recurse=True, force=True)
+
+            delete_all(root_collection)

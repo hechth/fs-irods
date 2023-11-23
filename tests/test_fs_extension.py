@@ -1,24 +1,27 @@
+import time
 import unittest
 from unittest.mock import patch
 from fs.test import FSTestCases
+from tests.DelayedSession import DelayedSession
 
-from fs_irods import iRODSFS
 from tests.builder_iRODSFS import iRODSFSBuilder
 
-from irods.session import iRODSSession
 
-class DummySession(iRODSSession):
-    def __init__(self, *args, **kwargs):
-        pass
-
-    def __enter__(self):
-        return super().__enter__()
-
-    def __exit__(self, *args):
-        super().__exit__(*args)
+@patch("fs_irods.iRODSFS.iRODSSession", new=DelayedSession)
+def test_delayed_session():
+    sut = iRODSFSBuilder().build()
+    now = time.time()
+    sut.listdir("/")
+    later = time.time()
+    assert later - now > 1
 
 class TestMyFS(FSTestCases, unittest.TestCase):
+
+    @patch("fs_irods.iRODSFS.iRODSSession", new=DelayedSession)
     def make_fs(self):
         sut = iRODSFSBuilder().build()
-        with patch.object(sut, "_session", wraps=DummySession.__enter__):
-            return sut
+        return sut
+
+    def destroy_fs(self, fs):
+        fs.clean()
+        self.fs.clean()
