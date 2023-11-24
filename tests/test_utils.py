@@ -16,5 +16,5 @@ from fs_irods import can_create
     ["w+b", True],
     ["a+b", True]
 ])
-def test_can_create(mode, expected):
+def test_can_create(mode: str, expected: bool):
     assert can_create(mode) == expected

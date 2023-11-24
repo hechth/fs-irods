@@ -1,12 +1,13 @@
 import time
 import pytest
+import os
 
 from fs_irods import iRODSFS
 from unittest.mock import patch
 from tests.DelayedSession import DelayedSession
 from tests.builder_iRODSFS import iRODSFSBuilder
 
-from fs.errors import DirectoryExists, ResourceNotFound, RemoveRootError, DirectoryExpected, FileExpected, FileExists
+from fs.errors import *
 
 
 @patch("fs_irods.iRODSFS.iRODSSession")
@@ -62,7 +63,7 @@ def test_makedir_exceptions(fs:iRODSFS, path: str, exception: type):
 @pytest.mark.parametrize("path", [
     "test.txt", "home/rods/test.txt"
 ])
-def test_create(fs: iRODSFS, path):
+def test_create_remove(fs: iRODSFS, path):
     fs.create(path)
     assert fs.isfile(path) == True
     fs.remove(path)
@@ -111,7 +112,7 @@ def test_exists(fs: iRODSFS, path: str, expected: bool):
 
 
 @pytest.mark.parametrize("path", [
-    "foo", "foo/bar"
+    "foo", "home/rods/test"
 ])
 def test_removedir(fs: iRODSFS, path: str):
     fs.makedir(path)
@@ -119,6 +120,27 @@ def test_removedir(fs: iRODSFS, path: str):
     fs.removedir(path)
     assert fs.isdir(path) == False
 
+
+@pytest.mark.parametrize("path, exception", [
+    ["", RemoveRootError],
+    ["/", RemoveRootError],
+    ["existing_file.txt", DirectoryExpected],
+    ["home/something", ResourceNotFound],
+    ["existing_collection", DirectoryNotEmpty]
+])
+def test_removedir_exceptions(fs: iRODSFS, path: str, exception: type):
+    with pytest.raises(exception):
+        fs.removedir(path)
+
+
+@pytest.mark.parametrize("path, exception", [
+    ["home", FileExpected],
+    ["some_file.txt", ResourceNotFound]
+])
+def test_remove_exceptions(fs: iRODSFS, path: str, exception: type):
+    with pytest.raises(exception):
+        fs.remove(path)
+    
 
 @pytest.mark.parametrize("path, expected", [
     ["/", ["/tempZone/existing_file.txt",  "/tempZone/existing_collection", "/tempZone/home", "/tempZone/trash", ]],
@@ -128,3 +150,32 @@ def test_removedir(fs: iRODSFS, path: str):
 def test_listdir(fs: iRODSFS, path: str, expected: list[str]):
     actual = fs.listdir(path)
     assert actual == expected
+
+@pytest.mark.parametrize("path, expected", [
+    ["home", False],
+    ["home/rods", True]
+])
+def test_isempty(fs: iRODSFS, path: str, expected: bool):
+    assert fs.isempty(path) == expected
+
+@pytest.mark.parametrize("path", [
+    "test/subdir"
+])
+def test_makedirs(fs:iRODSFS, path: str):
+    fs.makedirs(path)
+    assert fs.isdir(path)
+    fs.removedir(path)
+    fs.removedir(os.path.dirname(path))
+    assert fs.isdir(path) == False
+    assert fs.isdir(os.path.dirname(path)) == False
+
+
+def test_removetree(fs: iRODSFS):
+    fs.makedirs("test/subdir")
+    fs.create("test/subdir/file.txt")
+    assert fs.isfile("test/subdir/file.txt")
+
+    fs.removetree("test")
+    assert fs.exists("test/subdir/file.txt") == False
+    assert fs.exists("test/subdir") == False
+    assert fs.exists("test") == False
