@@ -2,7 +2,6 @@ from io import IOBase
 import os
 
 from multiprocessing import RLock
-from typing import Text
 from fs.base import FS
 from fs.info import Info
 from fs.permissions import Permissions
@@ -28,7 +27,7 @@ class iRODSFS(FS):
         self._password = password
         self._zone = zone
 
-    def _wrap(self, path: str) -> str:
+    def wrap(self, path: str) -> str:
         if path.startswith(f"/{self._zone}"):
             return path
         return str(iRODSPath(self._zone, path))
@@ -58,10 +57,10 @@ class iRODSFS(FS):
 
         with self._session() as session:
             raw_info = {"basic": {"name": path}}
-            if session.data_objects.exists(self._wrap(path)):
+            if session.data_objects.exists(self.wrap(path)):
                 raw_info["basic"]["is_dir"] = False
                 raw_info["details"] = {"type": "file"}
-            elif session.collections.exists(self._wrap(path)):
+            elif session.collections.exists(self.wrap(path)):
                 raw_info["basic"]["is_dir"] = True
                 raw_info["details"] = {"type": "directory"}
           
@@ -79,7 +78,7 @@ class iRODSFS(FS):
         """
         self._check_exists(path)
         with self._session() as session:
-            coll: iRODSCollection = session.collections.get(self._wrap(path))
+            coll: iRODSCollection = session.collections.get(self.wrap(path))
             return [item.path for item in coll.data_objects + coll.subcollections]
 
     def makedir(self, path: str, permissions: Permissions|None = None, recreate: bool = False):
@@ -103,7 +102,7 @@ class iRODSFS(FS):
             raise ResourceNotFound(path)
         
         with self._session() as session:           
-            session.collections.create(self._wrap(path), recurse=False)
+            session.collections.create(self.wrap(path), recurse=False)
     
     def openbin(self, path: str, mode:str = "r", buffering: int = -1, **options) -> IOBase:
         """Open a binary file-like object on the filesystem.
@@ -127,13 +126,13 @@ class iRODSFS(FS):
         self._check_isfile(path)
 
         with self._session() as session:
-            if not session.data_objects.exists(self._wrap(path)):
+            if not session.data_objects.exists(self.wrap(path)):
                 if not can_create(mode):
                     raise ResourceNotFound(path)
-                session.data_objects.create(self._wrap(path))
+                session.data_objects.create(self.wrap(path))
             
             mode = mode.replace("b", "")          
-            return session.data_objects.open(self._wrap(path), mode, **options)
+            return session.data_objects.open(self.wrap(path), mode, **options)
     
     def remove(self, path: str):
         """Remove a file from the filesystem.
@@ -147,7 +146,7 @@ class iRODSFS(FS):
         self._check_isfile(path)
         
         with self._session() as session:            
-            session.data_objects.unlink(self._wrap(path))
+            session.data_objects.unlink(self.wrap(path))
 
     def _check_isfile(self, path: str):
         """Check if a path points to a file and raise an FileExpected error if not.
@@ -179,7 +178,7 @@ class iRODSFS(FS):
             raise DirectoryNotEmpty(path)
 
         with self._session() as session:
-            session.collections.remove(self._wrap(path), recurse=False)
+            session.collections.remove(self.wrap(path), recurse=False)
 
     def _is_root(self, path: str) -> bool:
         """Check if path points to root of the filesystem.
@@ -207,13 +206,16 @@ class iRODSFS(FS):
 
         with self._session() as session:
             if self._is_root(path):
-                root: iRODSCollection = session.collections.get(self._wrap(path))
+                root: iRODSCollection = session.collections.get(self.wrap(path))
                 for item in root.data_objects:
                     item.unlink()
                 for item in root.subcollections:
+                    if item.name == "trash":
+                        continue
                     item.remove()
+                    item.unregister()
             else:
-                session.collections.remove(self._wrap(path), recurse=True)
+                session.collections.remove(self.wrap(path), recurse=True)
 
     def _check_isdir(self, path: str):
         """Check if a path is a directory.
@@ -244,7 +246,7 @@ class iRODSFS(FS):
             ResourceNotFound: If the path does not exist.
         """
         with self._session() as session:
-            path = self._wrap(path)
+            path = self.wrap(path)
             if not session.data_objects.exists(path) and not session.collections.exists(path):
                 raise ResourceNotFound(path)
     
@@ -256,7 +258,7 @@ class iRODSFS(FS):
             bool: True if the path is a file, False otherwise.
         """       
         with self._session() as session:
-            return session.data_objects.exists(self._wrap(path))
+            return session.data_objects.exists(self.wrap(path))
         
     def isdir(self, path: str) -> bool:
         """Check if a path is a directory.
@@ -266,7 +268,7 @@ class iRODSFS(FS):
             bool: True if the path is a directory, False otherwise.
         """
         with self._session() as session:
-            return session.collections.exists(self._wrap(path))
+            return session.collections.exists(self.wrap(path))
 
     def create(self, path:str):
         """Create a file on the filesystem.
@@ -283,7 +285,7 @@ class iRODSFS(FS):
             raise FileExists(path)
 
         with self._session() as session:
-            session.data_objects.create(self._wrap(path))
+            session.data_objects.create(self.wrap(path))
 
     def exists(self, path: str) -> bool:
         """Check if a resource exists.
@@ -293,5 +295,5 @@ class iRODSFS(FS):
             bool: True if the path exists, False otherwise.
         """
         with self._session() as session:
-            path = self._wrap(path)
+            path = self.wrap(path)
             return session.data_objects.exists(path) or session.collections.exists(path)

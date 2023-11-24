@@ -5,7 +5,7 @@ import os
 from fs_irods import iRODSFS
 from unittest.mock import patch
 from tests.DelayedSession import DelayedSession
-from tests.builder_iRODSFS import iRODSFSBuilder
+from tests.iRODSFSBuilder import iRODSFSBuilder
 
 from fs.errors import *
 
@@ -29,7 +29,15 @@ def test_delayed_session():
 @pytest.fixture
 def fs() -> iRODSFS:
     sut = iRODSFSBuilder().build()
-    return sut
+
+    sut.create("existing_file.txt")
+    sut.makedir("existing_collection")
+    sut.create("existing_collection/existing_file.txt")
+
+    yield sut
+
+    sut.removetree("existing_collection")
+    sut.remove("existing_file.txt")
 
 
 @pytest.mark.parametrize("path, expected", [
@@ -179,3 +187,31 @@ def test_removetree(fs: iRODSFS):
     assert fs.exists("test/subdir/file.txt") == False
     assert fs.exists("test/subdir") == False
     assert fs.exists("test") == False
+
+@pytest.mark.skip
+def test_removetree_root(fs: iRODSFS):
+    fs.removetree("")
+    assert fs.listdir("") == ["/tempZone/trash"]
+
+
+@pytest.mark.parametrize("path, expected", [
+    ["home", "/tempZone/home"],
+    ["", "/tempZone"],
+    ["/", "/tempZone"],
+    ["/tempZone/home", "/tempZone/home"],
+    ["/tempZone", "/tempZone"]
+])
+def test_wrap(fs: iRODSFS, path: str, expected:str):
+    assert fs.wrap(path) == expected
+
+
+def test_getsize(fs: iRODSFS):
+    fs.writebytes("empty", b"")
+    fs.writebytes("one", b"a")
+    fs.writebytes("onethousand", ("b" * 1000).encode("ascii"))
+    assert fs.getsize("empty") == 0
+    assert fs.getsize("one") == 1
+    assert fs.getsize("onethousand") == 1000
+
+    with pytest.raises(ResourceNotFound):
+        fs.getsize("doesnotexist")
