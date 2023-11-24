@@ -1,4 +1,4 @@
-from io import IOBase
+from io import BufferedIOBase, BufferedRandom, IOBase
 import os
 
 from multiprocessing import RLock
@@ -104,7 +104,8 @@ class iRODSFS(FS):
         with self._session() as session:           
             session.collections.create(self.wrap(path), recurse=False)
     
-    def openbin(self, path: str, mode:str = "r", buffering: int = -1, **options) -> IOBase:
+    @contextmanager
+    def openbin(self, path: str, mode:str = "r", buffering: int = -1, **options) -> BufferedRandom:
         """Open a binary file-like object on the filesystem.
         Args:
             path (str): A path to a file on the filesystem.
@@ -123,16 +124,29 @@ class iRODSFS(FS):
             FileExpected: If the path is not a file.
             FileExists: If the path exists, and exclusive mode is specified (x in the mode).
         """
+        
+        create = can_create(mode)
+        if not self.exists(path):
+            if not create:
+                raise ResourceNotFound(path)
+            self.create(path)
+
         self._check_isfile(path)
 
         with self._session() as session:
-            if not session.data_objects.exists(self.wrap(path)):
-                if not can_create(mode):
-                    raise ResourceNotFound(path)
-                session.data_objects.create(self.wrap(path))
-            
-            mode = mode.replace("b", "")          
-            return session.data_objects.open(self.wrap(path), mode, **options)
+            mode = mode.replace("b", "")
+            file = session.data_objects.open(
+                    self.wrap(path),
+                    mode,
+                    create,
+                    allow_redirect=False,
+                    auto_close=False,
+                    **options
+                )
+            try:
+                yield file
+            finally:
+                file.close()
     
     def remove(self, path: str):
         """Remove a file from the filesystem.

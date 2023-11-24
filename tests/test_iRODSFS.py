@@ -30,9 +30,12 @@ def test_delayed_session():
 def fs() -> iRODSFS:
     sut = iRODSFSBuilder().build()
 
-    sut.create("existing_file.txt")
-    sut.makedir("existing_collection")
-    sut.create("existing_collection/existing_file.txt")
+    if not sut.exists("existing_file.txt"):
+        sut.create("existing_file.txt")
+    if not sut.exists("existing_collection"):
+        sut.makedir("existing_collection")
+    if not sut.exists("existing_collection/existing_file.txt"):
+        sut.create("existing_collection/existing_file.txt")
 
     yield sut
 
@@ -204,6 +207,17 @@ def test_removetree_root(fs: iRODSFS):
 def test_wrap(fs: iRODSFS, path: str, expected:str):
     assert fs.wrap(path) == expected
 
+
+def test_openbin(fs: iRODSFS):
+    with fs.openbin("/home/rods/existing_file.txt", mode="w") as f:
+        assert f.writable()
+        assert f.readable()
+        assert f.closed == False
+        f.write("test".encode())
+        assert f.readlines() == ["test"]
+    assert f.closed == True
+    fs.remove("/home/rods/existing_file.txt")
+    
 
 def test_getsize(fs: iRODSFS):
     fs.writebytes("empty", b"")
