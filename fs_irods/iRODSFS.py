@@ -1,4 +1,6 @@
 from io import IOBase
+import os
+
 from multiprocessing import RLock
 from fs.base import FS
 from fs.info import Info
@@ -8,7 +10,8 @@ from fs.errors import DirectoryExists, ResourceNotFound, RemoveRootError, Direct
 from irods.session import iRODSSession
 from irods.collection import iRODSCollection
 from irods.path import iRODSPath
-import irods.test.helpers as h
+
+
 
 from contextlib import contextmanager
 
@@ -74,7 +77,7 @@ class iRODSFS(FS):
         self._assert_exists(path)
         with self._session() as session:
             coll: iRODSCollection = session.collections.get(self._wrap(path))
-            return [item.path for item in coll.data_objects]
+            return [item.path for item in coll.data_objects + coll.subcollections]
 
     def makedir(self, path: str, permissions: Permissions|None = None, recreate: bool = False):
         """Make a directory on the filesystem.
@@ -90,10 +93,13 @@ class iRODSFS(FS):
                 recreate is False.
             ResourceNotFound: If the path does not exist.
         """
-        with self._session() as session:
-            if session.collections.exists(self._wrap(path)) and not recreate:
-                raise DirectoryExists(path)
-            
+        if self.isdir(path) and not recreate:
+            raise DirectoryExists(path)
+        
+        if not self.isdir(os.path.dirname(path)):
+            raise ResourceNotFound(path)
+        
+        with self._session() as session:           
             session.collections.create(self._wrap(path), recurse=False)
     
     def openbin(self, path: str, mode:str = "r", buffering: int = -1, **options) -> IOBase:
@@ -180,7 +186,8 @@ class iRODSFS(FS):
             ResourceNotFound: If the path does not exist.
         """
         with self._session() as session:
-            if not session.data_objects.exists(self._wrap(path)) and not session.collections.exists(self._wrap(path)):
+            path = self._wrap(path)
+            if not session.data_objects.exists(path) and not session.collections.exists(path):
                 raise ResourceNotFound(path)
     
     def isfile(self, path: str) -> bool:
@@ -211,9 +218,13 @@ class iRODSFS(FS):
             ResourceNotFound: If any ancestor of path does not exist.
             FileExists: If the path exists.
         """
+        if not self.isdir(os.path.dirname(path)):
+            raise ResourceNotFound(path)
+
+        if self.isfile(path):
+            raise FileExists(path)
+
         with self._session() as session:
-            if session.data_objects.exists(self._wrap(path)):
-                raise FileExists(path)
             session.data_objects.create(self._wrap(path))
 
     def exists(self, path: str) -> bool:
@@ -224,7 +235,8 @@ class iRODSFS(FS):
             bool: True if the path exists, False otherwise.
         """
         with self._session() as session:
-            return session.data_objects.exists(self._wrap(path)) or session.collections.exists(self._wrap(path))
+            path = self._wrap(path)
+            return session.data_objects.exists(path) or session.collections.exists(path)
         
     def clean(self):
         """Clean up the filesystem.
@@ -232,12 +244,3 @@ class iRODSFS(FS):
         with self._session() as session:
             root_collection = session.collections.get(self._wrap(""))
 
-            def delete_all(collection):
-                for data_object in collection.data_objects:
-                    data_object.unlink(force=True)
-                for subcollection in collection.subcollections:
-                    if subcollection.name not in ["home", "trash", ""]:
-                        delete_all(subcollection)
-                        subcollection.remove(recurse=True, force=True)
-
-            delete_all(root_collection)

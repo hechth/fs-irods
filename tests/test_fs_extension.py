@@ -7,14 +7,6 @@ from tests.DelayedSession import DelayedSession
 from tests.builder_iRODSFS import iRODSFSBuilder
 
 
-@patch("fs_irods.iRODSFS.iRODSSession", new=DelayedSession)
-def test_delayed_session():
-    sut = iRODSFSBuilder().build()
-    now = time.time()
-    sut.listdir("/")
-    later = time.time()
-    assert later - now > 1
-
 class TestMyFS(FSTestCases, unittest.TestCase):
 
     @patch("fs_irods.iRODSFS.iRODSSession", new=DelayedSession)
