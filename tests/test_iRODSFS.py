@@ -211,11 +211,15 @@ def test_wrap(fs: iRODSFS, path: str, expected:str):
 def test_openbin(fs: iRODSFS):
     with fs.openbin("/home/rods/existing_file.txt", mode="w") as f:
         assert f.writable()
-        assert f.readable()
         assert f.closed == False
         f.write("test".encode())
-        assert f.readlines() == ["test"]
     assert f.closed == True
+
+    with fs.openbin("/home/rods/existing_file.txt", mode="r") as f:
+        assert f.readable()
+        assert f.readlines() == [b"test"]
+    assert f.closed == True
+
     fs.remove("/home/rods/existing_file.txt")
     
 
