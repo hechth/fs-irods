@@ -10,22 +10,6 @@ from tests.iRODSFSBuilder import iRODSFSBuilder
 from fs.errors import *
 
 
-@patch("fs_irods.iRODSFS.iRODSSession")
-def test_enters_session(mocksession):
-    sut = iRODSFSBuilder().build()
-    sut.listdir("/")
-    mocksession.assert_called()
-
-
-@patch("fs_irods.iRODSFS.iRODSSession", new=DelayedSession)
-def test_delayed_session():
-    sut = iRODSFSBuilder().build()
-    now = time.time()
-    sut.listdir("/")
-    later = time.time()
-    assert later - now > 1
-
-
 @pytest.fixture
 def fs() -> iRODSFS:
     sut = iRODSFSBuilder().build()
@@ -104,8 +88,8 @@ def test_get_info(fs: iRODSFS):
     assert info.name == "home"
     assert info.is_dir == True
     assert info.is_file == False
-    assert info.modified is None
-    assert info.created is None
+    assert info.modified is not None
+    assert info.created is not None
     assert info.accessed  is None
 
 
@@ -209,15 +193,17 @@ def test_wrap(fs: iRODSFS, path: str, expected:str):
 
 
 def test_openbin(fs: iRODSFS):
-    with fs.openbin("/home/rods/existing_file.txt", mode="w") as f:
-        assert f.writable()
-        assert f.closed == False
-        f.write("test".encode())
+    f = fs.openbin("/home/rods/existing_file.txt", mode="w")
+    assert f.writable()
+    assert f.closed == False
+    f.write("test".encode())
+    f.close()
     assert f.closed == True
 
-    with fs.openbin("/home/rods/existing_file.txt", mode="r") as f:
-        assert f.readable()
-        assert f.readlines() == [b"test"]
+    f = fs.openbin("/home/rods/existing_file.txt", mode="r")
+    assert f.readable()
+    assert f.readlines() == [b"test"]
+    f.close()
     assert f.closed == True
 
     fs.remove("/home/rods/existing_file.txt")
@@ -233,3 +219,7 @@ def test_getsize(fs: iRODSFS):
 
     with pytest.raises(ResourceNotFound):
         fs.getsize("doesnotexist")
+    
+    fs.remove("empty")
+    fs.remove("one")
+    fs.remove("onethousand")

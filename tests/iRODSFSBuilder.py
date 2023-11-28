@@ -1,5 +1,6 @@
 from fs_irods import iRODSFS
 
+from irods.session import iRODSSession
 
 class iRODSFSBuilder:
     def __init__(self):
@@ -30,4 +31,4 @@ class iRODSFSBuilder:
         return self
     
     def build(self):
-        return iRODSFS(host=self._host, port=self._port, user=self._user, password=self._password, zone=self._zone)
+        return iRODSFS(iRODSSession(host=self._host, port=self._port, user=self._user, password=self._password, zone=self._zone))

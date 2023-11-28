@@ -1,6 +1,7 @@
 import unittest
 import pytest
 from fs.test import FSTestCases
+from fs_irods import iRODSFS
 
 from tests.iRODSFSBuilder import iRODSFSBuilder
 
@@ -12,5 +13,5 @@ class TestMyFS(FSTestCases, unittest.TestCase):
         sut = iRODSFSBuilder().build()
         return sut
     
-    def destroy_fs(self, fs):
+    def destroy_fs(self, fs: iRODSFS):
         fs.removetree("")
