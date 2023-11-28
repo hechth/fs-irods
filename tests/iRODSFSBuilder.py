@@ -9,6 +9,7 @@ class iRODSFSBuilder:
         self._user = 'rods'
         self._password = 'rods'
         self._zone = 'tempZone'
+        self._session = iRODSSession(host=self._host, port=self._port, user=self._user, password=self._password, zone=self._zone)
 
     def with_host(self, host):
         self._host = host
@@ -30,5 +31,9 @@ class iRODSFSBuilder:
         self._zone = zone
         return self
     
+    def with_session(self, session):
+        self._session = session
+        return self
+    
     def build(self):
-        return iRODSFS(iRODSSession(host=self._host, port=self._port, user=self._user, password=self._password, zone=self._zone))
+        return iRODSFS(self._session)

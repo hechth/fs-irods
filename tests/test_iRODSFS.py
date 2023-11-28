@@ -8,11 +8,24 @@ from tests.DelayedSession import DelayedSession
 from tests.iRODSFSBuilder import iRODSFSBuilder
 
 from fs.errors import *
+import six
+
+def assert_bytes(fs: iRODSFS, path: str, contents: bytes):
+    """Assert a file contains the given bytes.
+    Arguments:
+        path (str): A path on the filesystem.
+        contents (bytes): Bytes to compare.
+    """
+    assert isinstance(contents, bytes)
+    data = fs.readbytes(path)
+    assert data == contents
+    assert type(data) == bytes
 
 
 @pytest.fixture
 def fs() -> iRODSFS:
-    sut = iRODSFSBuilder().build()
+    builder: iRODSFSBuilder = iRODSFSBuilder()
+    sut = builder.build()
 
     if not sut.exists("existing_file.txt"):
         sut.create("existing_file.txt")
@@ -25,6 +38,8 @@ def fs() -> iRODSFS:
 
     sut.removetree("existing_collection")
     sut.remove("existing_file.txt")
+    del(sut)
+    builder._session.cleanup()
 
 
 @pytest.mark.parametrize("path, expected", [
@@ -223,3 +238,38 @@ def test_getsize(fs: iRODSFS):
     fs.remove("empty")
     fs.remove("one")
     fs.remove("onethousand")
+
+
+def test_root_dir(fs:iRODSFS):
+    with pytest.raises(FileExpected):
+        fs.open("/")
+    with pytest.raises(FileExpected):
+        fs.openbin("/")
+
+def test_appendbytes(fs: iRODSFS):
+    try:
+        fs.appendbytes("foo", b"bar")
+        assert_bytes(fs, "foo", b"bar")
+
+        fs.appendbytes("foo", b"baz")
+        assert_bytes(fs, "foo", b"barbaz")
+    finally:
+        fs.remove("foo")
+
+def test_appendbytes_typeerror(fs: iRODSFS):
+    with pytest.raises(TypeError):
+        fs.appendbytes("foo", "bar")
+
+def test_basic(fs: iRODSFS):
+    #  Check str and repr don't break
+    repr(fs)
+    assert isinstance(six.text_type(fs), six.text_type)
+
+def test_getmeta(fs: iRODSFS):
+    meta = fs.getmeta()
+    assert meta == fs.getmeta(namespace="standard")
+    assert isinstance(meta, dict)
+
+    no_meta = fs.getmeta("__nosuchnamespace__")
+    assert isinstance(no_meta, dict)
+    assert not no_meta

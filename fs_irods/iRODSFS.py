@@ -1,4 +1,5 @@
-from io import BufferedIOBase, BufferedRandom, IOBase
+from io import BufferedRandom
+import io
 import os
 
 from multiprocessing import RLock
@@ -13,9 +14,8 @@ from irods.path import iRODSPath
 from irods.data_object import iRODSDataObject
 
 
-from contextlib import contextmanager
-
 from fs_irods.utils import can_create
+
 
 class iRODSFS(FS):
     def __init__(self, session: iRODSSession) -> None:
@@ -140,13 +140,15 @@ class iRODSFS(FS):
         with self._lock:
             mode = mode.replace("b", "")
             file = self._session.data_objects.open(
-                    self.wrap(path),
-                    mode,
-                    create,
-                    allow_redirect=False,
-                    auto_close=False,
-                    **options
-                )
+                self.wrap(path),
+                mode,
+                create,
+                allow_redirect=False,
+                auto_close=False,
+                **options
+            )
+            if 'a' in mode:
+                file.seek(0, io.SEEK_END)
             return file
     
     def remove(self, path: str):
