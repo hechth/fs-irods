@@ -2,6 +2,7 @@ from io import BufferedIOBase, BufferedRandom, IOBase
 import os
 
 from multiprocessing import RLock
+from typing import Text
 from fs.base import FS
 from fs.info import Info
 from fs.permissions import Permissions
@@ -311,3 +312,18 @@ class iRODSFS(FS):
         with self._session() as session:
             path = self.wrap(path)
             return session.data_objects.exists(path) or session.collections.exists(path)
+
+    def move(self, src_path: str, dst_path: str, overwrite: bool = False, preserve_time: bool = False) -> None:
+        """Move a file to the specified location
+
+        Args:
+            src_path (str): Path to the current location of the file
+            dst_path (str): Path to the target loaction of the file
+            overwrite (bool, optional): Set to True to overwrite an existing destination file. Defaults to False.
+            preserve_time (bool, optional): _description_. Defaults to False.
+        Raises:
+            ResourceNotFound: If the path does not exist.
+            FileExpected: If the source path is not a file.
+            DestinationExists: If destination path exists and overwrite is False.
+        """
+        return super().move(src_path, dst_path, overwrite, preserve_time)

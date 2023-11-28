@@ -233,3 +233,7 @@ def test_getsize(fs: iRODSFS):
 
     with pytest.raises(ResourceNotFound):
         fs.getsize("doesnotexist")
+
+
+def test_move(fs: iRODSFS):
+    pass
