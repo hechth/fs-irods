@@ -236,4 +236,7 @@ def test_getsize(fs: iRODSFS):
 
 
 def test_move(fs: iRODSFS):
-    pass
+    fs.move("/existing_file.txt", "new_file_location.txt")
+    assert fs.isfile("new_file_location.txt")
+
+    fs.remove("new_file_location.txt")
