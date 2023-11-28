@@ -1,10 +1,10 @@
+import time
 import unittest
 import pytest
 from fs.test import FSTestCases
 from fs_irods import iRODSFS
 
 from tests.iRODSFSBuilder import iRODSFSBuilder
-
 
 @pytest.mark.skip
 class TestMyFS(FSTestCases, unittest.TestCase):
@@ -14,4 +14,5 @@ class TestMyFS(FSTestCases, unittest.TestCase):
         return sut
     
     def destroy_fs(self, fs: iRODSFS):
-        fs.removetree("")
+        fs.removetree("/")
+        time.sleep(0.1)
