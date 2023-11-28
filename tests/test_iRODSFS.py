@@ -36,8 +36,11 @@ def fs() -> iRODSFS:
 
     yield sut
 
-    sut.removetree("existing_collection")
-    sut.remove("existing_file.txt")
+    if sut.exists("existing_collection"):
+        sut.removetree("existing_collection")
+    if sut.exists("existing_file.txt"):
+        sut.remove("existing_file.txt")
+    
     del(sut)
     builder._session.cleanup()
 
@@ -246,6 +249,7 @@ def test_root_dir(fs:iRODSFS):
     with pytest.raises(FileExpected):
         fs.openbin("/")
 
+
 def test_appendbytes(fs: iRODSFS):
     try:
         fs.appendbytes("foo", b"bar")
@@ -256,14 +260,17 @@ def test_appendbytes(fs: iRODSFS):
     finally:
         fs.remove("foo")
 
+
 def test_appendbytes_typeerror(fs: iRODSFS):
     with pytest.raises(TypeError):
         fs.appendbytes("foo", "bar")
+
 
 def test_basic(fs: iRODSFS):
     #  Check str and repr don't break
     repr(fs)
     assert isinstance(six.text_type(fs), six.text_type)
+
 
 def test_getmeta(fs: iRODSFS):
     meta = fs.getmeta()
@@ -276,7 +283,7 @@ def test_getmeta(fs: iRODSFS):
 
 
 def test_move(fs: iRODSFS):
-    fs.move("/existing_file.txt", "new_file_location.txt")
+    fs.move("existing_file.txt", "new_file_location.txt")
     assert fs.isfile("new_file_location.txt")
 
     fs.remove("new_file_location.txt")
