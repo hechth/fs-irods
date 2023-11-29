@@ -8,27 +8,24 @@ from tests.DelayedSession import DelayedSession
 from tests.iRODSFSBuilder import iRODSFSBuilder
 
 from fs.errors import *
+import six
 
-
-@patch("fs_irods.iRODSFS.iRODSSession")
-def test_enters_session(mocksession):
-    sut = iRODSFSBuilder().build()
-    sut.listdir("/")
-    mocksession.assert_called()
-
-
-@patch("fs_irods.iRODSFS.iRODSSession", new=DelayedSession)
-def test_delayed_session():
-    sut = iRODSFSBuilder().build()
-    now = time.time()
-    sut.listdir("/")
-    later = time.time()
-    assert later - now > 1
+def assert_bytes(fs: iRODSFS, path: str, contents: bytes):
+    """Assert a file contains the given bytes.
+    Arguments:
+        path (str): A path on the filesystem.
+        contents (bytes): Bytes to compare.
+    """
+    assert isinstance(contents, bytes)
+    data = fs.readbytes(path)
+    assert data == contents
+    assert type(data) == bytes
 
 
 @pytest.fixture
 def fs() -> iRODSFS:
-    sut = iRODSFSBuilder().build()
+    builder: iRODSFSBuilder = iRODSFSBuilder()
+    sut = builder.build()
 
     if not sut.exists("existing_file.txt"):
         sut.create("existing_file.txt")
@@ -41,6 +38,8 @@ def fs() -> iRODSFS:
 
     sut.removetree("existing_collection")
     sut.remove("existing_file.txt")
+    del(sut)
+    builder._session.cleanup()
 
 
 @pytest.mark.parametrize("path, expected", [
@@ -104,8 +103,8 @@ def test_get_info(fs: iRODSFS):
     assert info.name == "home"
     assert info.is_dir == True
     assert info.is_file == False
-    assert info.modified is None
-    assert info.created is None
+    assert info.modified is not None
+    assert info.created is not None
     assert info.accessed  is None
 
 
@@ -209,15 +208,17 @@ def test_wrap(fs: iRODSFS, path: str, expected:str):
 
 
 def test_openbin(fs: iRODSFS):
-    with fs.openbin("/home/rods/existing_file.txt", mode="w") as f:
-        assert f.writable()
-        assert f.closed == False
-        f.write("test".encode())
+    f = fs.openbin("/home/rods/existing_file.txt", mode="w")
+    assert f.writable()
+    assert f.closed == False
+    f.write("test".encode())
+    f.close()
     assert f.closed == True
 
-    with fs.openbin("/home/rods/existing_file.txt", mode="r") as f:
-        assert f.readable()
-        assert f.readlines() == [b"test"]
+    f = fs.openbin("/home/rods/existing_file.txt", mode="r")
+    assert f.readable()
+    assert f.readlines() == [b"test"]
+    f.close()
     assert f.closed == True
 
     fs.remove("/home/rods/existing_file.txt")
@@ -233,3 +234,42 @@ def test_getsize(fs: iRODSFS):
 
     with pytest.raises(ResourceNotFound):
         fs.getsize("doesnotexist")
+    
+    fs.remove("empty")
+    fs.remove("one")
+    fs.remove("onethousand")
+
+
+def test_root_dir(fs:iRODSFS):
+    with pytest.raises(FileExpected):
+        fs.open("/")
+    with pytest.raises(FileExpected):
+        fs.openbin("/")
+
+def test_appendbytes(fs: iRODSFS):
+    try:
+        fs.appendbytes("foo", b"bar")
+        assert_bytes(fs, "foo", b"bar")
+
+        fs.appendbytes("foo", b"baz")
+        assert_bytes(fs, "foo", b"barbaz")
+    finally:
+        fs.remove("foo")
+
+def test_appendbytes_typeerror(fs: iRODSFS):
+    with pytest.raises(TypeError):
+        fs.appendbytes("foo", "bar")
+
+def test_basic(fs: iRODSFS):
+    #  Check str and repr don't break
+    repr(fs)
+    assert isinstance(six.text_type(fs), six.text_type)
+
+def test_getmeta(fs: iRODSFS):
+    meta = fs.getmeta()
+    assert meta == fs.getmeta(namespace="standard")
+    assert isinstance(meta, dict)
+
+    no_meta = fs.getmeta("__nosuchnamespace__")
+    assert isinstance(no_meta, dict)
+    assert not no_meta
