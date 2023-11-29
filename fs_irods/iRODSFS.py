@@ -7,7 +7,7 @@ from typing import Text
 from fs.base import FS
 from fs.info import Info
 from fs.permissions import Permissions
-from fs.errors import DirectoryExists, ResourceNotFound, RemoveRootError, DirectoryExpected, FileExpected, FileExists, DirectoryNotEmpty
+from fs.errors import DirectoryExists, ResourceNotFound, RemoveRootError, DirectoryExpected, FileExpected, FileExists, DirectoryNotEmpty, DestinationExists
 
 from irods.session import iRODSSession
 from irods.collection import iRODSCollection
@@ -228,7 +228,7 @@ class iRODSFS(FS):
                 for item in root.data_objects:
                     item.unlink()
                 for item in root.subcollections:
-                    if item.name == "trash":
+                    if item.name in ["trash", "home"]:
                         continue
                     item.remove()
                     item.unregister()
@@ -329,5 +329,10 @@ class iRODSFS(FS):
             FileExpected: If the source path is not a file.
             DestinationExists: If destination path exists and overwrite is False.
         """
+        self._check_exists(src_path)
+        self._check_isfile(src_path)
+
+        if self.exists(dst_path) and not overwrite:
+            raise DestinationExists(dst_path)
         with self._lock:
             self._session.data_objects.move(self.wrap(src_path), self.wrap(dst_path))
