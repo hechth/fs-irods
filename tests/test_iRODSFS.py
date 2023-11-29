@@ -305,6 +305,7 @@ def test_move_exceptions(fs:iRODSFS, source: str, dest: str, overwrite:bool, exc
 def test_movedir(fs:iRODSFS):
     fs.movedir("/existing_collection", "home/rods")
     assert fs.isdir("/home/rods/existing_collection")
+    fs.removedir("/home/rods/existing_collection")
 
 
 
