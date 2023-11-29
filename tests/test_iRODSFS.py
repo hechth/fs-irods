@@ -303,8 +303,19 @@ def test_move_exceptions(fs:iRODSFS, source: str, dest: str, overwrite:bool, exc
 
 
 def test_movedir(fs:iRODSFS):
-    fs.movedir("existing_collection", "home/rods")
+    fs.movedir("/existing_collection", "home/rods")
     assert fs.isdir("/home/rods/existing_collection")
+
+
+
+@pytest.mark.parametrize("src_path, dst_path, create, exception", [
+    ["existing_file.txt", "/home/rods", False, DirectoryExpected],
+    ["/existing_collection", "/home/rods/test/a", False, ResourceNotFound]
+])
+def test_movedir_exceptions(fs: iRODSFS, src_path: str, dst_path: str, create: bool, exception:type):
+    with pytest.raises(exception):
+        fs.movedir(src_path, dst_path, create=create)
+
 
 
 def test_writetext_readtext(fs:iRODSFS):
