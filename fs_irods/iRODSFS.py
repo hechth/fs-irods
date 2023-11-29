@@ -296,14 +296,25 @@ class iRODSFS(FS):
             ResourceNotFound: If any ancestor of path does not exist.
             FileExists: If the path exists.
         """
-        if not self.isdir(os.path.dirname(path)):
-            raise ResourceNotFound(path)
+        self._check_points_into_collection(path)
 
         if self.isfile(path):
             raise FileExists(path)
 
         with self._lock:
             self._session.data_objects.create(self.wrap(path))
+
+    def _check_points_into_collection(self, path: str):
+        """Check if a path points to a location inside a collection.
+
+        Args:
+            path (str): Path to check.
+
+        Raises:
+            ResourceNotFound: If the path does not point to a location inside a collection.
+        """
+        if not self.isdir(os.path.dirname(path)):
+            raise ResourceNotFound(path)
 
     def exists(self, path: str) -> bool:
         """Check if a resource exists.
@@ -321,7 +332,7 @@ class iRODSFS(FS):
 
         Args:
             src_path (str): Path to the current location of the file
-            dst_path (str): Path to the target loaction of the file
+            dst_path (str): Path to the target location of the file
             overwrite (bool, optional): Set to True to overwrite an existing destination file. Defaults to False.
             preserve_time (bool, optional): _description_. Defaults to False.
         Raises:
@@ -336,3 +347,87 @@ class iRODSFS(FS):
             raise DestinationExists(dst_path)
         with self._lock:
             self._session.data_objects.move(self.wrap(src_path), self.wrap(dst_path))
+    
+    def upload(self, path: str, file: io.IOBase | str, chunk_size: int|None = None, **options):
+        """Set a file to the contents of a binary file object.
+
+        This method copies bytes from an open binary file to a file on
+        the filesystem. If the destination exists, it will first be
+        truncated.
+
+        Arguments:
+            path (str): A path on the filesystem.
+            file (io.IOBase or str): a file object open for reading in
+                binary mode or a path to a local file to upload.
+            chunk_size (int, optional): Number of bytes to read at a
+                time, if a simple copy is used, or `None` to use
+                sensible default.
+            **options: Implementation specific options required to open
+                the source file.
+
+        Raises:
+            ResourceNotFound: If a parent directory of ``path`` does not exist.
+
+        Note that the file object ``file`` will *not* be closed by this
+        method. Take care to close it after this method completes
+        (ideally with a context manager).
+
+        Example:
+            >>> with open('~/movies/starwars.mov', 'rb') as read_file:
+            ...     my_fs.upload('starwars.mov', read_file)
+
+        """
+        if isinstance(file, io.IOBase):
+            super().upload(path, file, chunk_size, **options)
+        elif isinstance(file, str):
+            self._check_points_into_collection(path)
+            with self._lock:
+                self._session.data_objects.put(
+                    file,
+                    self.wrap(path),
+                    allow_redirect=False,
+                    auto_close=False
+                )
+        else:
+            raise NotImplementedError()
+    
+    def download(self, path: str, file: io.IOBase | str, chunk_size=None, **options):
+        """Copy a file from the filesystem to a file-like object.
+
+        This may be more efficient that opening and copying files
+        manually if the filesystem supplies an optimized method.
+
+        Note that the file object ``file`` will *not* be closed by this
+        method. Take care to close it after this method completes
+        (ideally with a context manager).
+
+        Arguments:
+            path (str): Path to a resource.
+            file (file-like): A file-like object open for writing in
+                binary mode.
+            chunk_size (int, optional): Number of bytes to read at a
+                time, if a simple copy is used, or `None` to use
+                sensible default.
+            **options: Implementation specific options required to open
+                the source file.
+
+        Example:
+            >>> with open('starwars.mov', 'wb') as write_file:
+            ...     my_fs.download('/Videos/starwars.mov', write_file)
+
+        Raises:
+            ResourceNotFound: if ``path`` does not exist.
+        """
+        if isinstance(file, io.IOBase):
+            super().download(path, file, chunk_size=chunk_size, **options)
+        elif(isinstance(file, str)):
+            with self._lock:
+                self._check_exists(path)
+                self._session.data_objects.get(
+                    self.wrap(path),
+                    file,
+                    allow_redirect=False,
+                    auto_close=False
+                )
+        else:
+            raise NotImplementedError()

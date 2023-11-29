@@ -308,15 +308,32 @@ def test_writetext_readtext(fs:iRODSFS):
 
 
 def test_upload(fs: iRODSFS):
-    with open(os.path.join(os.path.curdir, "tests", "test-data", "test.txt"), mode='rb') as file:
+    testfile = os.path.join(os.path.curdir, "tests", "test-data", "test.txt")
+    with open(testfile, mode='rb') as file:
         fs.upload("uploaded_file.txt", file)
     assert fs.readtext("uploaded_file.txt") == "Hello World!"
     fs.remove("uploaded_file.txt")
+
+
+def test_upload_put(fs:iRODSFS):
+    testfile = os.path.join(os.path.curdir, "tests", "test-data", "test.txt")
+    dst_path = "/home/rods/uploaded_file.txt"
+
+    fs.upload(dst_path, testfile)
+    assert fs.readtext(dst_path) == "Hello World!"
+    fs.remove(dst_path)
 
 
 def test_download(fs:iRODSFS, tmp_path):
     tmp_file = os.path.join(tmp_path, "downloads.txt")
     with open(tmp_file, mode='wb') as file:
         fs.download("/existing_collection/existing_file.txt", file)
+    with(open(tmp_file)) as file:
+        assert file.read() == "content"
+
+
+def test_download_get(fs:iRODSFS, tmp_path):
+    tmp_file = os.path.join(tmp_path, "downloads.txt")
+    fs.download("/existing_collection/existing_file.txt", tmp_file)
     with(open(tmp_file)) as file:
         assert file.read() == "content"
