@@ -350,6 +350,19 @@ class iRODSFS(FS):
         with self._lock:
             self._session.data_objects.move(self.wrap(src_path), self.wrap(dst_path))
     
+    def movedir(self, src_path: str, dst_path: str, create: bool = False, preserve_time: bool = False):
+        """Move collection from one location to another.
+
+        Args:
+            src_path (str): Collection to move.
+            dst_path (str): Location where to move the collection.
+        Raises:
+            ResourceNotFound: If the source or target path do not exist and create is False.
+            DirectoryExpected: If the src_path is not a collection.
+        """
+        with self._lock:
+            self._session.collections.move(self.wrap(src_path), self.wrap(dst_path))
+    
     def upload(self, path: str, file: io.IOBase | str, chunk_size: int|None = None, **options):
         """Set a file to the contents of a binary file object.
 

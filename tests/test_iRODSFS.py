@@ -302,6 +302,11 @@ def test_move_exceptions(fs:iRODSFS, source: str, dest: str, overwrite:bool, exc
         fs.move(source, dest, overwrite=overwrite)
 
 
+def test_movedir(fs:iRODSFS):
+    fs.movedir("existing_collection", "home/rods")
+    assert fs.isdir("/home/rods/existing_collection")
+
+
 def test_writetext_readtext(fs:iRODSFS):
     fs.writetext("existing_file.txt", "test")
     assert fs.readtext("existing_file.txt") == "test"
