@@ -33,11 +33,15 @@ def fs() -> iRODSFS:
         sut.makedir("existing_collection")
     if not sut.exists("existing_collection/existing_file.txt"):
         sut.create("existing_collection/existing_file.txt")
+        sut.writetext("existing_collection/existing_file.txt", "content")
 
     yield sut
 
-    sut.removetree("existing_collection")
-    sut.remove("existing_file.txt")
+    if sut.exists("existing_collection"):
+        sut.removetree("existing_collection")
+    if sut.exists("existing_file.txt"):
+        sut.remove("existing_file.txt")
+    
     del(sut)
     builder._session.cleanup()
 
@@ -246,6 +250,7 @@ def test_root_dir(fs:iRODSFS):
     with pytest.raises(FileExpected):
         fs.openbin("/")
 
+
 def test_appendbytes(fs: iRODSFS):
     try:
         fs.appendbytes("foo", b"bar")
@@ -256,14 +261,17 @@ def test_appendbytes(fs: iRODSFS):
     finally:
         fs.remove("foo")
 
+
 def test_appendbytes_typeerror(fs: iRODSFS):
     with pytest.raises(TypeError):
         fs.appendbytes("foo", "bar")
+
 
 def test_basic(fs: iRODSFS):
     #  Check str and repr don't break
     repr(fs)
     assert isinstance(six.text_type(fs), six.text_type)
+
 
 def test_getmeta(fs: iRODSFS):
     meta = fs.getmeta()
@@ -273,3 +281,59 @@ def test_getmeta(fs: iRODSFS):
     no_meta = fs.getmeta("__nosuchnamespace__")
     assert isinstance(no_meta, dict)
     assert not no_meta
+
+
+def test_move(fs: iRODSFS):
+    fs.writetext("existing_file.txt", "test")
+    fs.move("existing_file.txt", "new_file_location.txt")
+    
+    assert fs.isfile("new_file_location.txt")
+    assert fs.readtext("new_file_location.txt") == "test"
+    fs.remove("new_file_location.txt")
+
+
+@pytest.mark.parametrize("source, dest, overwrite, exception", [
+    ["non_existing_file", "new_location", False, ResourceNotFound],
+    ["home", "somewhere", False, FileExpected],
+    ["existing_file.txt", "/existing_collection/existing_file.txt", False, DestinationExists]
+])
+def test_move_exceptions(fs:iRODSFS, source: str, dest: str, overwrite:bool, exception: type):
+    with pytest.raises(exception):
+        fs.move(source, dest, overwrite=overwrite)
+
+
+def test_writetext_readtext(fs:iRODSFS):
+    fs.writetext("existing_file.txt", "test")
+    assert fs.readtext("existing_file.txt") == "test"
+
+
+def test_upload(fs: iRODSFS):
+    testfile = os.path.join(os.path.curdir, "tests", "test-data", "test.txt")
+    with open(testfile, mode='rb') as file:
+        fs.upload("uploaded_file.txt", file)
+    assert fs.readtext("uploaded_file.txt") == "Hello World!"
+    fs.remove("uploaded_file.txt")
+
+
+def test_upload_put(fs:iRODSFS):
+    testfile = os.path.join(os.path.curdir, "tests", "test-data", "test.txt")
+    dst_path = "/home/rods/uploaded_file.txt"
+
+    fs.upload(dst_path, testfile)
+    assert fs.readtext(dst_path) == "Hello World!"
+    fs.remove(dst_path)
+
+
+def test_download(fs:iRODSFS, tmp_path):
+    tmp_file = os.path.join(tmp_path, "downloads.txt")
+    with open(tmp_file, mode='wb') as file:
+        fs.download("/existing_collection/existing_file.txt", file)
+    with(open(tmp_file)) as file:
+        assert file.read() == "content"
+
+
+def test_download_get(fs:iRODSFS, tmp_path):
+    tmp_file = os.path.join(tmp_path, "downloads.txt")
+    fs.download("/existing_collection/existing_file.txt", tmp_file)
+    with(open(tmp_file)) as file:
+        assert file.read() == "content"
