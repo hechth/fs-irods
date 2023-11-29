@@ -1,3 +1,4 @@
+import datetime
 from io import BufferedRandom
 import io
 import os
@@ -16,6 +17,7 @@ from irods.data_object import iRODSDataObject
 
 from fs_irods.utils import can_create
 
+_utc=datetime.timezone(datetime.timedelta(0))
 
 class iRODSFS(FS):
     def __init__(self, session: iRODSSession) -> None:
@@ -66,8 +68,8 @@ class iRODSFS(FS):
             raw_info["basic"]["name"] = data_object.name
             raw_info["access"]["user"] = data_object.owner_name
 
-            raw_info["details"]["modified"] = data_object.modify_time.timestamp()
-            raw_info["details"]["created"] = data_object.create_time.timestamp()
+            raw_info["details"]["modified"] = data_object.modify_time.replace(tzinfo=_utc).timestamp()
+            raw_info["details"]["created"] = data_object.create_time.replace(tzinfo=_utc).timestamp()
           
             return Info(raw_info)
     
