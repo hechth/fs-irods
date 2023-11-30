@@ -323,7 +323,6 @@ def test_movedir_exceptions(fs: iRODSFS, src_path: str, dst_path: str, create: b
         fs.movedir(src_path, dst_path, create=create)
 
 
-
 def test_writetext_readtext(fs:iRODSFS):
     fs.writetext("existing_file.txt", "test")
     assert fs.readtext("existing_file.txt") == "test"
@@ -359,3 +358,22 @@ def test_download_get(fs:iRODSFS, tmp_path):
     fs.download("/existing_collection/existing_file.txt", tmp_file)
     with(open(tmp_file)) as file:
         assert file.read() == "content"
+
+
+@pytest.mark.parametrize("src_path, dst_path, overwrite", [
+    ["existing_collection/existing_file.txt", "a.txt", False]
+])
+def test_copy(fs: iRODSFS, src_path: str, dst_path: str, overwrite: bool):
+    fs.copy(src_path, dst_path, overwrite)
+    assert fs.readtext(src_path) == fs.readtext(dst_path)
+    fs.remove(dst_path)
+
+
+@pytest.mark.parametrize("src_path, dst_path, overwrite, exception", [
+    ["blub.txt", "a", False, ResourceNotFound], 
+    ["existing_collection", "a", False, FileExpected], 
+    ["existing_file.txt", "/existing_collection/existing_file.txt", False, DestinationExists] 
+])
+def test_copy_exceptions(fs: iRODSFS, src_path: str, dst_path: str, overwrite: bool, exception: type):
+    with pytest.raises(exception):
+        fs.copy(src_path, dst_path, overwrite=overwrite)

@@ -344,11 +344,14 @@ class iRODSFS(FS):
         """
         self._check_exists(src_path)
         self._check_isfile(src_path)
+        self._check_can_overwrite(dst_path, overwrite)
 
-        if self.exists(dst_path) and not overwrite:
-            raise DestinationExists(dst_path)
         with self._lock:
             self._session.data_objects.move(self.wrap(src_path), self.wrap(dst_path))
+
+    def _check_can_overwrite(self, dst_path, overwrite):
+        if self.exists(dst_path) and not overwrite:
+            raise DestinationExists(dst_path)
     
     def movedir(self, src_path: str, dst_path: str, create: bool = False, preserve_time: bool = False):
         """Move collection from one location to another.
@@ -452,3 +455,27 @@ class iRODSFS(FS):
                 )
         else:
             raise NotImplementedError()
+    
+    def copy(self, src_path: str, dst_path: str, overwrite: bool = False, preserve_time: bool = False):
+        """Copy file contents from ``src_path`` to ``dst_path``.
+
+        Arguments:
+            src_path (str): Path of source file.
+            dst_path (str): Path to destination file.
+            overwrite (bool): If `True`, overwrite the destination file
+                if it exists (defaults to `False`).
+            preserve_time (bool): If `True`, try to preserve mtime of the
+                resource (defaults to `False`).
+        Raises:
+            DestinationExists: If ``dst_path`` exists,
+                and ``overwrite`` is `False`.
+            ResourceNotFound: If a parent directory of
+                ``dst_path`` does not exist.
+            FileExpected: If ``src_path`` is not a file.
+        """
+        self._check_exists(src_path)
+        self._check_isfile(src_path)
+        self._check_can_overwrite(dst_path, overwrite)
+        
+        with self._lock:
+            self._session.data_objects.copy(self.wrap(src_path), self.wrap(dst_path))
