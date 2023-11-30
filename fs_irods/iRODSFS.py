@@ -356,10 +356,16 @@ class iRODSFS(FS):
         Args:
             src_path (str): Collection to move.
             dst_path (str): Location where to move the collection.
+            create (bool): Whether to create the path if it doesn't exist.
         Raises:
             ResourceNotFound: If the source or target path do not exist and create is False.
             DirectoryExpected: If the src_path is not a collection.
         """
+        self._check_isdir(src_path)
+        if not create:
+            self._check_points_into_collection(dst_path)
+        if not self.exists(dst_path) and create:
+            self.makedirs(dst_path)
         with self._lock:
             self._session.collections.move(self.wrap(src_path), self.wrap(dst_path))
     
