@@ -361,7 +361,8 @@ def test_download_get(fs:iRODSFS, tmp_path):
 
 
 @pytest.mark.parametrize("src_path, dst_path, overwrite", [
-    ["existing_collection/existing_file.txt", "a.txt", False]
+    ["existing_collection/existing_file.txt", "a.txt", False], 
+    ["existing_collection/existing_file.txt", "existing_file.txt", True]
 ])
 def test_copy(fs: iRODSFS, src_path: str, dst_path: str, overwrite: bool):
     fs.copy(src_path, dst_path, overwrite)
