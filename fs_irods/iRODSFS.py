@@ -20,21 +20,22 @@ from fs_irods.utils import can_create
 
 _utc=datetime.timezone(datetime.timedelta(0))
 
+class BadPath(Exception):pass
+
 class iRODSFS(FS):
-    def __init__(self, session: iRODSSession) -> None:
+
+    def __init__(self, session: iRODSSession, root_path : str = "/") -> None:
         super().__init__()
         self._lock = RLock()
         self._host = session.host
         self._port = session.port
         self._zone = session.zone
-
+        self.root_path = str(iRODSPath(root_path or "/"))
+        self.root_path_len = len(self.root_path)
         self._session = session
 
-    def wrap(self, path: str) -> str:
-        if path.startswith(f"/{self._zone}"):
-            return path
-        return str(iRODSPath(self._zone, path))
-        
+    def _wrap(self, path: str) -> str:
+        return str(iRODSPath(self.root_path, path))
 
     def getinfo(self, path: str, namespaces: list|None = None) -> Info:
         """Get information about a resource on the filesystem.
@@ -53,7 +54,7 @@ class iRODSFS(FS):
 
         with self._lock:
             raw_info: dict = {"basic": {}, "details": {}, "access": {}}
-            path = self.wrap(path)
+            path = self._wrap(path)
             data_object: iRODSDataObject|iRODSCollection = None
 
             if self._session.data_objects.exists(path):
@@ -71,9 +72,15 @@ class iRODSFS(FS):
 
             raw_info["details"]["modified"] = data_object.modify_time.replace(tzinfo=_utc).timestamp()
             raw_info["details"]["created"] = data_object.create_time.replace(tzinfo=_utc).timestamp()
-          
             return Info(raw_info)
-    
+     
+    def denorm(self, path):
+        if not path.startswith(self.root_path):
+            raise BadPath
+        chop = path[self.root_path_len:]
+        return '/'+chop if not chop.startswith('/') \
+                else chop
+
     def listdir(self, path: str) -> list:
         """List a directory on the filesystem.
         Args:
@@ -86,8 +93,8 @@ class iRODSFS(FS):
         """
         self._check_exists(path)
         with self._lock:
-            coll: iRODSCollection = self._session.collections.get(self.wrap(path))
-            return [item.path for item in coll.data_objects + coll.subcollections]
+            coll: iRODSCollection = self._session.collections.get(self._wrap(path))
+            return [_ for _ in [self.denorm(item.path) for item in coll.data_objects + coll.subcollections] if _ not in ("","/")]
 
     def makedir(self, path: str, permissions: Permissions|None = None, recreate: bool = False):
         """Make a directory on the filesystem.
@@ -110,7 +117,7 @@ class iRODSFS(FS):
             raise ResourceNotFound(path)
         
         with self._lock:
-            self._session.collections.create(self.wrap(path), recurse=False)
+            self._session.collections.create(self._wrap(path), recurse=False)
     
     def openbin(self, path: str, mode:str = "r", buffering: int = -1, **options) -> BufferedRandom:
         """Open a binary file-like object on the filesystem.
@@ -143,7 +150,7 @@ class iRODSFS(FS):
         with self._lock:
             mode = mode.replace("b", "")
             file = self._session.data_objects.open(
-                self.wrap(path),
+                self._wrap(path),
                 mode,
                 create,
                 allow_redirect=False,
@@ -166,7 +173,7 @@ class iRODSFS(FS):
         self._check_isfile(path)
         
         with self._lock:
-            self._session.data_objects.unlink(self.wrap(path))
+            self._session.data_objects.unlink(self._wrap(path))
 
     def _check_isfile(self, path: str):
         """Check if a path points to a file and raise an FileExpected error if not.
@@ -198,7 +205,7 @@ class iRODSFS(FS):
             raise DirectoryNotEmpty(path)
 
         with self._lock:
-            self._session.collections.remove(self.wrap(path), recurse=False)
+            self._session.collections.remove(self._wrap(path), recurse=False)
 
     def _is_root(self, path: str) -> bool:
         """Check if path points to root of the filesystem.
@@ -226,7 +233,7 @@ class iRODSFS(FS):
 
         with self._lock:
             if self._is_root(path):
-                root: iRODSCollection = self._session.collections.get(self.wrap(path))
+                root: iRODSCollection = self._session.collections.get(self._wrap(path))
                 for item in root.data_objects:
                     item.unlink()
                 for item in root.subcollections:
@@ -235,7 +242,7 @@ class iRODSFS(FS):
                     item.remove()
                     item.unregister()
             else:
-                self._session.collections.remove(self.wrap(path), recurse=True)
+                self._session.collections.remove(self._wrap(path), recurse=True)
 
     def _check_isdir(self, path: str):
         """Check if a path is a directory.
@@ -266,7 +273,7 @@ class iRODSFS(FS):
             ResourceNotFound: If the path does not exist.
         """
         with self._lock:
-            path = self.wrap(path)
+            path = self._wrap(path)
             if not self._session.data_objects.exists(path) and not self._session.collections.exists(path):
                 raise ResourceNotFound(path)
     
@@ -278,7 +285,7 @@ class iRODSFS(FS):
             bool: True if the path is a file, False otherwise.
         """       
         with self._lock:
-            return self._session.data_objects.exists(self.wrap(path))
+            return self._session.data_objects.exists(self._wrap(path))
         
     def isdir(self, path: str) -> bool:
         """Check if a path is a directory.
@@ -288,7 +295,7 @@ class iRODSFS(FS):
             bool: True if the path is a directory, False otherwise.
         """
         with self._lock:
-            return self._session.collections.exists(self.wrap(path))
+            return self._session.collections.exists(self._wrap(path))
 
     def create(self, path:str):
         """Create a file on the filesystem.
@@ -304,7 +311,7 @@ class iRODSFS(FS):
             raise FileExists(path)
 
         with self._lock:
-            self._session.data_objects.create(self.wrap(path))
+            self._session.data_objects.create(self._wrap(path))
 
     def _check_points_into_collection(self, path: str):
         """Check if a path points to a location inside a collection.
@@ -326,7 +333,7 @@ class iRODSFS(FS):
             bool: True if the path exists, False otherwise.
         """
         with self._lock:
-            path = self.wrap(path)
+            path = self._wrap(path)
             return self._session.data_objects.exists(path) or self._session.collections.exists(path)
 
     def move(self, src_path: str, dst_path: str, overwrite: bool = False, preserve_time: bool = False) -> None:
@@ -348,7 +355,7 @@ class iRODSFS(FS):
         if self.exists(dst_path) and not overwrite:
             raise DestinationExists(dst_path)
         with self._lock:
-            self._session.data_objects.move(self.wrap(src_path), self.wrap(dst_path))
+            self._session.data_objects.move(self._wrap(src_path), self._wrap(dst_path))
     
     def upload(self, path: str, file: io.IOBase | str, chunk_size: int|None = None, **options):
         """Set a file to the contents of a binary file object.
@@ -386,7 +393,7 @@ class iRODSFS(FS):
             with self._lock:
                 self._session.data_objects.put(
                     file,
-                    self.wrap(path),
+                    self._wrap(path),
                     allow_redirect=False,
                     auto_close=False
                 )
@@ -426,7 +433,7 @@ class iRODSFS(FS):
             with self._lock:
                 self._check_exists(path)
                 self._session.data_objects.get(
-                    self.wrap(path),
+                    self._wrap(path),
                     file,
                     allow_redirect=False,
                     auto_close=False
