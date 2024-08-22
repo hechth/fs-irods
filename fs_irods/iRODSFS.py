@@ -57,7 +57,7 @@ class iRODSFS(FS):
         return str(iRODSPath(self._zone, path))
         
 
-    def getinfo(self, path: str, namespaces: list|None = None) -> Info:
+    def getinfo(self, path: str, namespaces: list = None) -> Info:
         """Get information about a resource on the filesystem.
         Args:
             path (str): A path to a resource on the filesystem.
@@ -110,7 +110,7 @@ class iRODSFS(FS):
             coll: iRODSCollection = self._session.collections.get(self.wrap(path))
             return [item.path for item in coll.data_objects + coll.subcollections]
 
-    def makedir(self, path: str, permissions: Permissions|None = None, recreate: bool = False):
+    def makedir(self, path: str, permissions: Permissions = None, recreate: bool = False):
         """Make a directory on the filesystem.
         Args:
             path (str): A path to a directory on the filesystem.
@@ -392,7 +392,7 @@ class iRODSFS(FS):
         with self._lock:
             self._session.data_objects.move(self.wrap(src_path), self.wrap(dst_path))
     
-    def upload(self, path: str, file: io.IOBase | str, chunk_size: int|None = None, **options):
+    def upload(self, path: str, file, chunk_size: int = None, **options):
         """Set a file to the contents of a binary file object.
 
         This method copies bytes from an open binary file to a file on
@@ -435,7 +435,7 @@ class iRODSFS(FS):
         else:
             raise NotImplementedError()
     
-    def download(self, path: str, file: io.IOBase | str, chunk_size=None, **options):
+    def download(self, path: str, file, chunk_size=None, **options):
         """Copy a file from the filesystem to a file-like object.
 
         This may be more efficient that opening and copying files
