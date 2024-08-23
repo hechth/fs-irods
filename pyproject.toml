@@ -23,7 +23,7 @@ license = "MIT"
 [tool.poetry.dependencies]
 python = "^3.8"
 fs = "^2.4.16"
-python-irodsclient = "^1.1.9"
+python-irodsclient = ">=1.1.9"
 
 
 [tool.poetry.group.dev.dependencies]

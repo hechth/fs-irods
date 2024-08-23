@@ -1,10 +1,13 @@
+import atexit
 import datetime
 from io import BufferedRandom
 import io
+import logging
 import os
 
 from multiprocessing import RLock
 from typing import Text
+from weakref import WeakKeyDictionary
 from fs.base import FS
 from fs.info import Info
 from fs.permissions import Permissions
@@ -18,6 +21,24 @@ from irods.data_object import iRODSDataObject
 
 from fs_irods.utils import can_create
 
+fses = WeakKeyDictionary()
+_logger = logging.getLogger(__name__)
+
+# Close out dangling file handles.
+def finalize():
+    for fs in list(fses):
+        fs._finalize_files()
+
+try:
+    # (see python-irodsclient issue #614)
+    from irods.at_client_exit import (
+        register as register_cleanup_function,
+        BEFORE_PRC)
+    register_cleanup_function(BEFORE_PRC, finalize)
+except ImportError:
+    _logger.info("Content written to iRODSFS file handles may not be automatically saved at process exit [#18]."
+                 "  Recommend upgrading to >=v3.0.0 of the Python iRODS Client.")
+
 _utc=datetime.timezone(datetime.timedelta(0))
 
 class iRODSFS(FS):
@@ -27,8 +48,9 @@ class iRODSFS(FS):
         self._host = session.host
         self._port = session.port
         self._zone = session.zone
-
         self._session = session
+        self.files = WeakKeyDictionary()
+        fses[self] = None
 
     def wrap(self, path: str) -> str:
         if path.startswith(f"/{self._zone}"):
@@ -112,6 +134,27 @@ class iRODSFS(FS):
         with self._lock:
             self._session.collections.create(self.wrap(path), recurse=False)
     
+    # Allow Python iRODS Client to preemptively close handles to data object (aka "file") handles opened via
+    # iRODSFS, if this is happening at interpreter exit, so it can ensure shutdown happen in the proper order.
+    def _finalize_files(self):
+        self._files_finalized = 1
+        l = list(self.files)
+        while l:
+            f = l.pop()
+            if not f.closed:
+                f.close()
+
+    def __del__(self):
+        if not getattr(self,'_files_finalized',None):
+            self._finalize_files()
+
+    # Store weak references to open file handles that maintain a hard reference to the iRODSFS object.
+    # In this way, the iRODSFS can only be destructed once these file handles are gone.
+    def open(self,*a,**kw):
+        fd = super().open(*a,**kw)
+        self.files[fd] = self
+        return fd
+
     def openbin(self, path: str, mode:str = "r", buffering: int = -1, **options) -> BufferedRandom:
         """Open a binary file-like object on the filesystem.
         Args:
