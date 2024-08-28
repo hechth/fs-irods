@@ -1,4 +1,3 @@
-import atexit
 import datetime
 from io import BufferedRandom
 import io
