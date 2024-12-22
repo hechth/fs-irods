@@ -17,7 +17,6 @@ from irods.collection import iRODSCollection
 from irods.path import iRODSPath
 from irods.data_object import iRODSDataObject
 
-
 from fs_irods.utils import can_create
 
 fses = WeakKeyDictionary()
@@ -28,16 +27,19 @@ def finalize():
     for fs in list(fses):
         fs._finalize_files()
 
-try:
-    # (see python-irodsclient issue #614)
-    from irods.at_client_exit import (
-        register as register_cleanup_function,
-        BEFORE_PRC)
-    register_cleanup_function(BEFORE_PRC, finalize)
-except ImportError:
-    _logger.info("Content written to iRODSFS file handles may not be automatically saved at process exit [#18]."
-                 "  Recommend upgrading to >=v3.0.0 of the Python iRODS Client.")
+from  irods.at_client_exit import register_for_execution_before_prc_cleanup as register_prior_cleanups
+register_prior_cleanups(finalize)
 
+#try:
+#    # (see python-irodsclient issue #614)
+#    from irods.at_client_exit import (
+#        register as register_cleanup_function,
+#        BEFORE_PRC)
+#    register_cleanup_function(BEFORE_PRC, finalize)
+#except ImportError:
+#    _logger.info("Content written to iRODSFS file handles may not be automatically saved at process exit [#18]."
+#                 "  Recommend upgrading to >=v3.0.0 of the Python iRODS Client.")
+#
 _utc=datetime.timezone(datetime.timedelta(0))
 
 class BadPath(Exception):pass
