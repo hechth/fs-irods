@@ -17,7 +17,5 @@ class iRODSOpener(Opener):
         
         # TODO - We can use parse_result.resource to determine the root_path parameter value
         #        in the iRODSFS constructor, once an issue 16 fix is merged.
-        ##import pdb
-        ##pdb.set_trace()
-        return iRODSFS(helpers.make_session())
+        return iRODSFS(helpers.make_session(), root_path = parse_result.resource)
         
