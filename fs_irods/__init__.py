@@ -10,3 +10,5 @@ __email__ = "helge.hecht@recetox.muni.cz"
 __version__ = "0.1.0"
 
 __all__ = ["iRODSFS", "can_create"]
+
+from . import opener
