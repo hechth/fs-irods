@@ -200,6 +200,7 @@ class iRODSFS(FS):
                 create,
                 allow_redirect=False,
                 auto_close=False,
+                buffering=buffering,
                 **options
             )
             if 'a' in mode:
