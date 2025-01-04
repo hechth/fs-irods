@@ -198,8 +198,6 @@ class iRODSFS(FS):
                 self._wrap(path),
                 mode,
                 create,
-                allow_redirect=False,
-                auto_close=False,
                 buffering=buffering,
                 **options
             )
