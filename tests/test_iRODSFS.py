@@ -24,40 +24,59 @@ def assert_bytes(fs: iRODSFS, path: str, contents: bytes):
 
 @pytest.fixture
 def fs() -> iRODSFS:
-    builder: iRODSFSBuilder = iRODSFSBuilder()
+    builder: iRODSFSBuilder = iRODSFSBuilder().with_root("/")
     sut = builder.build()
 
-    if not sut.exists("existing_file.txt"):
-        sut.create("existing_file.txt")
-    if not sut.exists("existing_collection"):
-        sut.makedir("existing_collection")
-    if not sut.exists("existing_collection/existing_file.txt"):
-        sut.create("existing_collection/existing_file.txt")
-        sut.writetext("existing_collection/existing_file.txt", "content")
+    if not sut.exists("/tempZone/existing_file.txt"):
+        sut.create("/tempZone/existing_file.txt")
+    if not sut.exists("/tempZone/existing_collection"):
+        sut.makedir("/tempZone/existing_collection")
+    if not sut.exists("/tempZone/existing_collection/existing_file.txt"):
+        sut.create("/tempZone/existing_collection/existing_file.txt")
+        sut.writetext("/tempZone/existing_collection/existing_file.txt", "content")
 
     yield sut
 
-    if sut.exists("existing_collection"):
-        sut.removetree("existing_collection")
-    if sut.exists("existing_file.txt"):
-        sut.remove("existing_file.txt")
+    if sut.exists("/tempZone/existing_collection"):
+        sut.removetree("/tempZone/existing_collection")
+    if sut.exists("/tempZone/existing_file.txt"):
+        sut.remove("/tempZone/existing_file.txt")
+    if sut.exists("/tempZone/new_collection"):
+        sut.removetree("/tempZone/new_collection")
     
     del(sut)
     builder._session.cleanup()
 
+@pytest.mark.parametrize("path, expected", [
+    ["/", 1], ["/tempZone", 4]
+])
+def test_scandir(fs: iRODSFS, path: str, expected: int):
+    actual = list(fs.scandir(path))
+    assert len(actual) == expected
+    
 
 @pytest.mark.parametrize("path, expected", [
-    ["home", True],
-    ["home/rods", True],
-    ["existing_file.txt", False],
-    ["i_dont_exist", False]
+    ["/tempZone/home", True],
+    ["/tempZone/home/rods", True],
+    ["/tempZone/existing_file.txt", False],
+    ["/tempZone/i_dont_exist", False]
 ])
 def test_isdir(fs: iRODSFS, path: str, expected: bool):
     assert fs.isdir(path) == expected
 
 
+@pytest.mark.parametrize("path, expected", [
+    ["/tempZone/existing_file.txt", True],
+    ["/tempZone/existing_collection/existing_file.txt", True],
+    ["/tempZone/i_dont_exist", False],
+    ["/tempZone/new_collection", False],
+    ["/tempZone", False],
+])
+def test_isfile(fs: iRODSFS, path:str, expected: bool):
+    assert fs.isfile(path) == expected
+
 @pytest.mark.parametrize("path", [
-    "test", "home/rods/test"
+    "/tempZone/test", "/tempZone/home/rods/test"
 ])
 def test_makedir(fs: iRODSFS, path:str):
     fs.makedir(path)
@@ -66,8 +85,8 @@ def test_makedir(fs: iRODSFS, path:str):
     assert fs.isdir(path) == False
 
 @pytest.mark.parametrize("path, exception", [
-    ["home", DirectoryExists],
-    ["test/subcollection", ResourceNotFound]
+    ["/tempZone/home", DirectoryExists],
+    ["/tempZone/test/subcollection", ResourceNotFound]
 ])
 def test_makedir_exceptions(fs:iRODSFS, path: str, exception: type):
     with pytest.raises(exception):
@@ -75,7 +94,7 @@ def test_makedir_exceptions(fs:iRODSFS, path: str, exception: type):
 
 
 @pytest.mark.parametrize("path", [
-    "test.txt", "home/rods/test.txt"
+    "/tempZone/test.txt", "/tempZone/home/rods/test.txt"
 ])
 def test_create_remove(fs: iRODSFS, path):
     fs.create(path)
@@ -85,7 +104,7 @@ def test_create_remove(fs: iRODSFS, path):
 
 
 @pytest.mark.parametrize("path", [
-    "test.txt", "/home/rods/test.txt"
+    "/tempZone/test.txt", "/tempZone//home/rods/test.txt"
 ])
 def test_create_fileexists(fs: iRODSFS, path: str):
     fs.create(path)
@@ -95,7 +114,7 @@ def test_create_fileexists(fs: iRODSFS, path: str):
 
 
 @pytest.mark.parametrize("path", [
-    "/missing_collection/file.txt"
+    "/tempZone/missing_collection/file.txt"
 ])
 def test_create_resourcenotfound(fs: iRODSFS, path: str):
     with pytest.raises(ResourceNotFound):
@@ -103,7 +122,7 @@ def test_create_resourcenotfound(fs: iRODSFS, path: str):
 
 
 def test_get_info(fs: iRODSFS):
-    info = fs.getinfo("home")
+    info = fs.getinfo("/tempZone/home")
     assert info.name == "home"
     assert info.is_dir == True
     assert info.is_file == False
@@ -113,20 +132,20 @@ def test_get_info(fs: iRODSFS):
 
 
 @pytest.mark.parametrize("path, expected", [
-    ["home", True],
-    ["home/rods", True],
-    ["fakedir", False],
-    ["home/other_user", False],
-    ["existing_file.txt", True],
-    ["existing_collection/existing_file.txt", True],
-    ["existing_collection/bad_file.txt", False]
+    ["/tempZone/home", True],
+    ["/tempZone/home/rods", True],
+    ["/tempZone/fakedir", False],
+    ["/tempZone/home/other_user", False],
+    ["/tempZone/existing_file.txt", True],
+    ["/tempZone/existing_collection/existing_file.txt", True],
+    ["/tempZone/existing_collection/bad_file.txt", False]
 ])
 def test_exists(fs: iRODSFS, path: str, expected: bool):
     assert fs.exists(path) == expected
 
 
 @pytest.mark.parametrize("path", [
-    "foo", "home/rods/test"
+    "/tempZone/foo", "/tempZone/home/rods/test"
 ])
 def test_removedir(fs: iRODSFS, path: str):
     fs.makedir(path)
@@ -138,9 +157,9 @@ def test_removedir(fs: iRODSFS, path: str):
 @pytest.mark.parametrize("path, exception", [
     ["", RemoveRootError],
     ["/", RemoveRootError],
-    ["existing_file.txt", DirectoryExpected],
-    ["home/something", ResourceNotFound],
-    ["existing_collection", DirectoryNotEmpty]
+    ["/tempZone/existing_file.txt", DirectoryExpected],
+    ["/tempZone/home/something", ResourceNotFound],
+    ["/tempZone/existing_collection", DirectoryNotEmpty]
 ])
 def test_removedir_exceptions(fs: iRODSFS, path: str, exception: type):
     with pytest.raises(exception):
@@ -148,8 +167,8 @@ def test_removedir_exceptions(fs: iRODSFS, path: str, exception: type):
 
 
 @pytest.mark.parametrize("path, exception", [
-    ["home", FileExpected],
-    ["some_file.txt", ResourceNotFound]
+    ["/tempZone/home", FileExpected],
+    ["/tempZone/some_file.txt", ResourceNotFound]
 ])
 def test_remove_exceptions(fs: iRODSFS, path: str, exception: type):
     with pytest.raises(exception):
@@ -157,23 +176,25 @@ def test_remove_exceptions(fs: iRODSFS, path: str, exception: type):
     
 
 @pytest.mark.parametrize("path, expected", [
-    ["/", ["/tempZone/existing_file.txt",  "/tempZone/existing_collection", "/tempZone/home", "/tempZone/trash", ]],
-    ["", ["/tempZone/existing_file.txt",  "/tempZone/existing_collection", "/tempZone/home", "/tempZone/trash"]],
-    ["home", ["/tempZone/home/public", "/tempZone/home/rods"]]
+    ["/tempZone", ["/tempZone/existing_file.txt",  "/tempZone/existing_collection", "/tempZone/home", "/tempZone/trash", ]],
+    ["", ["/tempZone"]],
+    ["/tempZone/home", ["/tempZone/home/public", "/tempZone/home/rods"]]
 ])
 def test_listdir(fs: iRODSFS, path: str, expected: list[str]):
     actual = fs.listdir(path)
     assert actual == expected
 
+
 @pytest.mark.parametrize("path, expected", [
-    ["home", False],
-    ["home/rods", True]
+    ["/tempZone/home", False],
+    ["/tempZone/home/rods", True]
 ])
 def test_isempty(fs: iRODSFS, path: str, expected: bool):
     assert fs.isempty(path) == expected
 
+
 @pytest.mark.parametrize("path", [
-    "test/subdir"
+    "/tempZone/test/subdir"
 ])
 def test_makedirs(fs:iRODSFS, path: str):
     fs.makedirs(path)
@@ -185,14 +206,14 @@ def test_makedirs(fs:iRODSFS, path: str):
 
 
 def test_removetree(fs: iRODSFS):
-    fs.makedirs("test/subdir")
-    fs.create("test/subdir/file.txt")
-    assert fs.isfile("test/subdir/file.txt")
+    fs.makedirs("/tempZone/test/subdir")
+    fs.create("/tempZone/test/subdir/file.txt")
+    assert fs.isfile("/tempZone/test/subdir/file.txt")
 
-    fs.removetree("test")
-    assert fs.exists("test/subdir/file.txt") == False
-    assert fs.exists("test/subdir") == False
-    assert fs.exists("test") == False
+    fs.removetree("/tempZone/test")
+    assert fs.exists("/tempZone/test/subdir/file.txt") == False
+    assert fs.exists("/tempZone/test/subdir") == False
+    assert fs.exists("/tempZone/test") == False
 
 @pytest.mark.skip
 def test_removetree_root(fs: iRODSFS):
@@ -201,9 +222,9 @@ def test_removetree_root(fs: iRODSFS):
 
 
 @pytest.mark.parametrize("path, expected", [
-    ["home", "/tempZone/home"],
-    ["", "/tempZone"],
-    ["/", "/tempZone"],
+    ["home", "/home"],
+    ["", "/"],
+    ["/", "/"],
     ["/tempZone/home", "/tempZone/home"],
     ["/tempZone", "/tempZone"]
 ])
@@ -212,36 +233,35 @@ def test_wrap(fs: iRODSFS, path: str, expected:str):
 
 
 def test_openbin(fs: iRODSFS):
-    f = fs.openbin("/home/rods/existing_file.txt", mode="w")
+    f = fs.openbin("/tempZone/home/rods/existing_file.txt", mode="w")
     assert f.writable()
     assert f.closed == False
     f.write("test".encode())
     f.close()
     assert f.closed == True
 
-    f = fs.openbin("/home/rods/existing_file.txt", mode="r")
+    f = fs.openbin("/tempZone/home/rods/existing_file.txt", mode="r")
     assert f.readable()
     assert f.readlines() == [b"test"]
     f.close()
     assert f.closed == True
 
-    fs.remove("/home/rods/existing_file.txt")
+    fs.remove("/tempZone/home/rods/existing_file.txt")
     
+@pytest.mark.parametrize("path, content, expected", [
+    ["/tempZone/empty", b"", 0],
+    ["/tempZone/one", b"a", 1],
+    ["/tempZone/onethousand", ("b" * 1000).encode("ascii"), 1000]
+])
+def test_getsize(fs: iRODSFS, path: str, content: bytes, expected: int):
+    fs.writebytes(path, content)
+    assert fs.getsize(path) == expected    
+    fs.remove(path)
 
-def test_getsize(fs: iRODSFS):
-    fs.writebytes("empty", b"")
-    fs.writebytes("one", b"a")
-    fs.writebytes("onethousand", ("b" * 1000).encode("ascii"))
-    assert fs.getsize("empty") == 0
-    assert fs.getsize("one") == 1
-    assert fs.getsize("onethousand") == 1000
 
+def test_getsize_exception(fs: iRODSFS):
     with pytest.raises(ResourceNotFound):
         fs.getsize("doesnotexist")
-    
-    fs.remove("empty")
-    fs.remove("one")
-    fs.remove("onethousand")
 
 
 def test_root_dir(fs:iRODSFS):
@@ -253,18 +273,18 @@ def test_root_dir(fs:iRODSFS):
 
 def test_appendbytes(fs: iRODSFS):
     try:
-        fs.appendbytes("foo", b"bar")
-        assert_bytes(fs, "foo", b"bar")
+        fs.appendbytes("/tempZone/foo", b"bar")
+        assert_bytes(fs, "/tempZone/foo", b"bar")
 
-        fs.appendbytes("foo", b"baz")
-        assert_bytes(fs, "foo", b"barbaz")
+        fs.appendbytes("/tempZone/foo", b"baz")
+        assert_bytes(fs, "/tempZone/foo", b"barbaz")
     finally:
-        fs.remove("foo")
+        fs.remove("/tempZone/foo")
 
 
 def test_appendbytes_typeerror(fs: iRODSFS):
     with pytest.raises(TypeError):
-        fs.appendbytes("foo", "bar")
+        fs.appendbytes("/tempZone/foo", "bar")
 
 
 def test_basic(fs: iRODSFS):
@@ -284,40 +304,43 @@ def test_getmeta(fs: iRODSFS):
 
 
 def test_move(fs: iRODSFS):
-    fs.writetext("existing_file.txt", "test")
-    fs.move("existing_file.txt", "new_file_location.txt")
+    fs.writetext("/tempZone/existing_file.txt", "test")
+    fs.move("/tempZone/existing_file.txt", "/tempZone/new_file_location.txt")
     
-    assert fs.isfile("new_file_location.txt")
-    assert fs.readtext("new_file_location.txt") == "test"
-    fs.remove("new_file_location.txt")
+    assert fs.isfile("/tempZone/new_file_location.txt")
+    assert fs.readtext("/tempZone/new_file_location.txt") == "test"
+    fs.remove("/tempZone/new_file_location.txt")
 
 
 @pytest.mark.parametrize("source, dest, overwrite, exception", [
-    ["non_existing_file", "new_location", False, ResourceNotFound],
-    ["home", "somewhere", False, FileExpected],
-    ["existing_file.txt", "/existing_collection/existing_file.txt", False, DestinationExists]
+    ["/tempZone/non_existing_file", "/tempZone/new_location", False, ResourceNotFound],
+    ["/tempZone/home", "/tempZone/somewhere", False, FileExpected],
+    ["/tempZone/existing_file.txt", "/tempZone//existing_collection/existing_file.txt", False, DestinationExists]
 ])
 def test_move_exceptions(fs:iRODSFS, source: str, dest: str, overwrite:bool, exception: type):
     with pytest.raises(exception):
         fs.move(source, dest, overwrite=overwrite)
 
 
-def test_writetext_readtext(fs:iRODSFS):
-    fs.writetext("existing_file.txt", "test")
-    assert fs.readtext("existing_file.txt") == "test"
+@pytest.mark.parametrize("path, content",[
+    ["/tempZone/existing_file.txt", "test"]
+])
+def test_writetext_readtext(fs:iRODSFS, path: str, content: str):
+    fs.writetext(path, content)
+    assert fs.readtext(path) == content
 
 
 def test_upload(fs: iRODSFS):
     testfile = os.path.join(os.path.curdir, "tests", "test-data", "test.txt")
     with open(testfile, mode='rb') as file:
-        fs.upload("uploaded_file.txt", file)
-    assert fs.readtext("uploaded_file.txt") == "Hello World!"
-    fs.remove("uploaded_file.txt")
+        fs.upload("/tempZone/uploaded_file.txt", file)
+    assert fs.readtext("/tempZone/uploaded_file.txt") == "Hello World!"
+    fs.remove("/tempZone/uploaded_file.txt")
 
 
 def test_upload_put(fs:iRODSFS):
     testfile = os.path.join(os.path.curdir, "tests", "test-data", "test.txt")
-    dst_path = "/home/rods/uploaded_file.txt"
+    dst_path = "/tempZone/home/rods/uploaded_file.txt"
 
     fs.upload(dst_path, testfile)
     assert fs.readtext(dst_path) == "Hello World!"
@@ -327,13 +350,57 @@ def test_upload_put(fs:iRODSFS):
 def test_download(fs:iRODSFS, tmp_path):
     tmp_file = os.path.join(tmp_path, "downloads.txt")
     with open(tmp_file, mode='wb') as file:
-        fs.download("/existing_collection/existing_file.txt", file)
+        fs.download("/tempZone/existing_collection/existing_file.txt", file)
     with(open(tmp_file)) as file:
         assert file.read() == "content"
 
 
 def test_download_get(fs:iRODSFS, tmp_path):
     tmp_file = os.path.join(tmp_path, "downloads.txt")
-    fs.download("/existing_collection/existing_file.txt", tmp_file)
+    fs.download("/tempZone/existing_collection/existing_file.txt", tmp_file)
     with(open(tmp_file)) as file:
         assert file.read() == "content"
+
+@pytest.mark.skip
+@pytest.mark.parametrize("dst_path, result_path, overwrite", [
+    ["/tempZone/existing_file_copy.txt", "/tempZone/existing_file_copy.txt", False],
+    ["/tempZone/home", "/tempZone/home/existing_file.txt", False],
+    ["/tempZone/existing_collection", "/tempZone/existing_collection/existing_file.txt", True],
+    ["/tempZone/new_collection", "/tempZone/new_collection/existing_file.txt", False],
+    ["/tempZone/new_collection/existing_file.txt", "/tempZone/new_collection/existing_file.txt", False],
+    ["/tempZone/existing_collection/existing_file.txt", "/tempZone/existing_collection/existing_file.txt", True],
+])
+def test_copy(fs: iRODSFS, dst_path: str, result_path: str, overwrite: bool):
+    src_path = "/tempZone/existing_file.txt"
+    fs.copy(src_path, dst_path, overwrite)
+
+    assert fs.exists(result_path)
+    assert fs.readbytes(src_path) == fs.readbytes(result_path)
+
+    fs.remove(result_path)
+
+
+@pytest.mark.skip
+@pytest.mark.parametrize("src_path, dst_path, overwrite, exception", [
+    ["/tempZone/existing_file.txt", "/tempZone/existing_collection", False, DestinationExists],
+    ["not_existing.txt", "/tempZone/", False, ResourceNotFound],
+    ["/tempZone/existing_collection", "/tempZone/", False, FileExpected],
+    ["/tempZone/existing_file.txt", "/tempZone/fakeFolder", False, ResourceNotFound],
+    ["/tempZone/existing_file.txt", "/tempZone/fakeFolder/existing_file.txt", False, ResourceNotFound],
+    ["/tempZone/existing_file.txt", "/tempZone/fakeFolder/test", False, ResourceNotFound]
+])
+def test_copy_exceptions(fs: iRODSFS, src_path: str, dst_path: str, overwrite: bool, exception: Exception):
+    with pytest.raises(exception):
+        fs.copy(src_path, dst_path, overwrite)
+
+
+@pytest.mark.parametrize("path, expected", [
+    ["/tempZone/", True],
+    ["/", True],
+    ["/tempZone/existing_file.txt", True],
+    ["existing_file.txt", True],
+    ["/tempZone/fakeFolder", True],
+    ["/tempZone/fakeFolder/test", False]
+])
+def test_points_into_collection(fs:iRODSFS, path: str, expected: bool):
+    assert fs.points_into_collection(path) == expected

@@ -21,7 +21,7 @@ from fs_irods.utils import can_create
 _utc=datetime.timezone(datetime.timedelta(0))
 
 class iRODSFS(FS):
-    def __init__(self, session: iRODSSession) -> None:
+    def __init__(self, session: iRODSSession, root: str|None = None) -> None:
         super().__init__()
         self._lock = RLock()
         self._host = session.host
@@ -29,13 +29,15 @@ class iRODSFS(FS):
         self._zone = session.zone
 
         self._session = session
+        self._root = root if root else self._zone
 
     def wrap(self, path: str) -> str:
-        if path.startswith(f"/{self._zone}"):
-            return path
-        return str(iRODSPath(self._zone, path))
+        return str(iRODSPath(self._root, path))
+    
+    def parent(self, path: str):
+        return os.path.dirname(path)
+    
         
-
     def getinfo(self, path: str, namespaces: list|None = None) -> Info:
         """Get information about a resource on the filesystem.
         Args:
@@ -131,7 +133,6 @@ class iRODSFS(FS):
             FileExpected: If the path is not a file.
             FileExists: If the path exists, and exclusive mode is specified (x in the mode).
         """
-        
         create = can_create(mode)
         if not self.exists(path):
             if not create:
@@ -162,7 +163,6 @@ class iRODSFS(FS):
             ResourceNotFound: If the path does not exist.
             FileExpected: If the path is not a file.
         """
-        self._check_exists(path)
         self._check_isfile(path)
         
         with self._lock:
@@ -176,6 +176,7 @@ class iRODSFS(FS):
             ResourceNotFound: If the path does not exist.
             FileExpected: If the path is not a file.
         """
+        self._check_exists(path)
         if not self.isfile(path):
             raise FileExpected(path)
     
@@ -189,7 +190,6 @@ class iRODSFS(FS):
             RemoveRootError: If the path is the root directory.
             DirectoryNotEmpty: If the directory is not empty.
         """
-        self._check_exists(path)
         self._check_isdir(path)
 
         if self._is_root(path):
@@ -221,7 +221,6 @@ class iRODSFS(FS):
             ResourceNotFound: If the path does not exist.
             DirectoryExpected: If the path is not a directory.
         """
-        self._check_exists(path)
         self._check_isdir(path)
 
         with self._lock:
@@ -242,8 +241,10 @@ class iRODSFS(FS):
         Args:
             path (str): A path to a resource on the filesystem.
         Raises:
+            ResourceNotFound: If the path does not exist.
             DirectoryExpected: If the path is not a directory.
         """
+        self._check_exists(path)
         if not self.isdir(path):
             raise DirectoryExpected(path)
     
@@ -315,8 +316,19 @@ class iRODSFS(FS):
         Raises:
             ResourceNotFound: If the path does not point to a location inside a collection.
         """
-        if not self.isdir(os.path.dirname(path)):
+        if not self.points_into_collection(path):
             raise ResourceNotFound(path)
+
+    def points_into_collection(self, path: str) -> bool:
+        """Return true if the path is located inside a collection, aka the parent is a collection.
+
+        Args:
+            path (str): Path to check
+
+        Returns:
+            bool: True if the parent of path is a collection.
+        """
+        return self.isdir(os.path.dirname(path))
 
     def exists(self, path: str) -> bool:
         """Check if a resource exists.
@@ -349,6 +361,32 @@ class iRODSFS(FS):
             raise DestinationExists(dst_path)
         with self._lock:
             self._session.data_objects.move(self.wrap(src_path), self.wrap(dst_path))
+    
+    def copy(self, src_path: str, dst_path: str, overwrite: bool = False, preserve_time: bool = False):
+        """copy a file from one position to another
+
+        Args:
+            src_path (str): Path to source file to copy
+            dst_path (str): Destination
+            overwrite (bool, optional): Whether to overwrite if the destination exists. Defaults to False.
+            preserve_time (bool, optional): Whether to preserve the original modification time. Defaults to False.
+        Raises:
+            DestinationExists: If ``dst_path`` exists and ``overwrite`` is `False`.
+            ResourceNotFound: If a parent directory of ``dst_path`` does not exist.
+            FileExpected: If ``src_path`` is not a file.
+        """
+        self._check_isfile(src_path)
+
+        if self.isdir(dst_path):
+            dst_path = os.path.join(dst_path, os.path.basename(src_path))
+
+        if self.isfile(dst_path):
+            if overwrite == False:
+                raise DestinationExists(dst_path)
+            self.remove(dst_path)
+        
+        with self._lock:
+            self._session.data_objects.copy(self.wrap(src_path), self.wrap(dst_path))
     
     def upload(self, path: str, file: io.IOBase | str, chunk_size: int|None = None, **options):
         """Set a file to the contents of a binary file object.
