@@ -385,6 +385,8 @@ class iRODSFS(FS):
                 raise DestinationExists(dst_path)
             self.remove(dst_path)
         
+        self._check_exists(dst_path)
+        
         with self._lock:
             self._session.data_objects.copy(self.wrap(src_path), self.wrap(dst_path))
     
