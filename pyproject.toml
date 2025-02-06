@@ -20,10 +20,14 @@ keywords = [
 ]
 license = "MIT"
 
+[[tool.poetry.source]]
+name = "pypi-public"
+url = "https://pypi.org/simple/"
+
 [tool.poetry.dependencies]
 python = "^3.8"
 fs = "^2.4.16"
-python-irodsclient = ">=1.1.9"
+python-irodsclient = "^3.0.0"
 
 
 [tool.poetry.group.dev.dependencies]
@@ -33,6 +37,7 @@ twine = "^4.0.2"
 build = "^1.0.3"
 ruff = "^0.1.5"
 pytest-mock = "^3.12.0"
+jupyter = "^1.1.1"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
