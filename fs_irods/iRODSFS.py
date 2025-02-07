@@ -6,9 +6,10 @@ import os
 from multiprocessing import RLock
 from typing import Text
 from fs.base import FS
+from fs.errors import DirectoryExists, ResourceNotFound, RemoveRootError, DirectoryExpected, FileExpected, FileExists, DirectoryNotEmpty, DestinationExists
 from fs.info import Info
 from fs.permissions import Permissions
-from fs.errors import DirectoryExists, ResourceNotFound, RemoveRootError, DirectoryExpected, FileExpected, FileExists, DirectoryNotEmpty, DestinationExists
+from fs.walk import Walker
 
 from irods.session import iRODSSession
 from irods.collection import iRODSCollection
@@ -377,18 +378,56 @@ class iRODSFS(FS):
         """
         self._check_isfile(src_path)
 
-        if self.isdir(dst_path):
-            dst_path = os.path.join(dst_path, os.path.basename(src_path))
+        if self.exists(dst_path):
+            if self.isdir(dst_path):
+                dst_path = os.path.join(dst_path, os.path.basename(src_path))
 
-        if self.isfile(dst_path):
-            if overwrite == False:
-                raise DestinationExists(dst_path)
-            self.remove(dst_path)
-        
-        self._check_exists(dst_path)
+            if self.isfile(dst_path):
+                if overwrite == False:
+                    raise DestinationExists(dst_path)
+                self.remove(dst_path)
+        else:
+            self._check_points_into_collection(dst_path)
         
         with self._lock:
             self._session.data_objects.copy(self.wrap(src_path), self.wrap(dst_path))
+
+            if preserve_time:
+                raise NotImplementedError()
+    
+    def copydir(self, src_path: str, dst_path: str, create: bool = False, preserve_time: bool = False):
+        """Copy the contents of the folder src_path to dst_path.
+
+        Args:
+            src_path (str): Source directory to copy.
+            dst_path (str): Where to copy the folder to.
+            create (bool, optional): Create the target directory if it does not exist. Defaults to False.
+            preserve_time (bool, optional): Perserve the modification time.
+                                            Not implemented. Defaults to False.
+        Raises:
+            ResourceNotFound: If the ``dst_path`` does not exist, and ``create`` is not `True`.
+            DirectoryExpected: If ``src_path`` is not a directory.
+        """
+        self._check_isdir(src_path)
+        if create and self.isdir(dst_path) is False:
+            self.makedirs(dst_path)
+        self._check_isdir(dst_path)
+
+        src_basename = os.path.basename(src_path)
+        dst = os.path.join(dst_path, src_basename)
+
+        walker = Walker(self)
+
+        for path, dirs, files in walker.walk(self, path = src_path, namespaces=["details"]):
+            for dir in dirs:
+                # this is wrong and needs to be changed -> paths have to be relative to the copying root
+                # dst_dir = os.path.join(dst, dir)
+                # self.makedir(dst_dir)
+                print(dir)
+            for file in files:
+                # src_file = os.path.join(src_path, file.name)
+                # self.copy(src_file, dst)
+                print(file)
     
     def upload(self, path: str, file: io.IOBase | str, chunk_size: int|None = None, **options):
         """Set a file to the contents of a binary file object.

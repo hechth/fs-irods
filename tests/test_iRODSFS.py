@@ -1,5 +1,5 @@
 import time
-from typing import Generator
+from typing import Generator, List
 import pytest
 import os
 
@@ -9,7 +9,10 @@ from tests.DelayedSession import DelayedSession
 from tests.iRODSFSBuilder import iRODSFSBuilder
 
 from fs.errors import *
+from fs.walk import Walker
 import six
+
+from tests.test_utils import WalkResult
 
 def assert_bytes(fs: iRODSFS, path: str, contents: bytes):
     """Assert a file contains the given bytes.
@@ -58,6 +61,7 @@ def test_default_state():
     del(sut)
     builder._session.cleanup()
 
+
 @pytest.mark.parametrize("path, expected", [
     ["/", 1], ["/tempZone", 4]
 ])
@@ -94,6 +98,7 @@ def test_makedir(fs: iRODSFS, path:str):
     assert fs.isdir(path) == True
     fs.removedir(path)
     assert fs.isdir(path) == False
+
 
 @pytest.mark.parametrize("path, exception", [
     ["/tempZone/home", DirectoryExists],
@@ -173,6 +178,28 @@ def test_removedir_exceptions(fs: iRODSFS, path: str, exception: type):
     with pytest.raises(exception):
         fs.removedir(path)
 
+@pytest.mark.parametrize("src_path, dst_path, create", [
+    ["/tempZone/existing_collection", "/tempZone/home", False]
+])
+def test_copydir(fs:iRODSFS, src_path: str, dst_path: str, create: bool):
+    fs.copydir(src_path, dst_path, create)
+    result_path = os.path.join(dst_path, os.path.basename(src_path))
+
+    assert fs.isdir(result_path)
+    assert list(fs.scandir(src_path)) == list(fs.scandir(result_path))
+    
+    fs.removetree(result_path)
+
+
+
+@pytest.mark.parametrize("src_path, dst_path, exception", [
+    ["/tempZone/existing_file.txt", "/", DirectoryExpected],
+    ["/tempZone/existing_collection", "/tempZone/new_collection", ResourceNotFound]
+])
+def test_copydir_exceptions(fs: iRODSFS, src_path: str, dst_path: str, exception: Exception):
+    with pytest.raises(exception):
+        fs.copydir(src_path, dst_path)
+
 
 @pytest.mark.parametrize("path, exception", [
     ["/tempZone/home", FileExpected],
@@ -211,6 +238,14 @@ def test_makedirs(fs:iRODSFS, path: str):
     fs.removedir(os.path.dirname(path))
     assert fs.isdir(path) == False
     assert fs.isdir(os.path.dirname(path)) == False
+
+@pytest.mark.parametrize("path, recreate, exception", [
+    ["/tempZone/home", False, DirectoryExists],
+    ["/tempZone/existing_collection/existing_file.txt/subfolder", False, DirectoryExpected]
+])
+def test_makedirs_exception(fs: iRODSFS, path:str, recreate: bool, exception: Exception):
+    with pytest.raises(exception):
+        fs.makedirs(path, recreate = recreate)
 
 
 def test_removetree(fs: iRODSFS):
@@ -373,8 +408,6 @@ def test_download_get(fs:iRODSFS, tmp_path):
     ["/tempZone/existing_file_copy.txt", "/tempZone/existing_file_copy.txt", False],
     ["/tempZone/home", "/tempZone/home/existing_file.txt", False],
     ["/tempZone/existing_collection", "/tempZone/existing_collection/existing_file.txt", True],
-    ["/tempZone/new_collection", "/tempZone/new_collection/existing_file.txt", False],
-    ["/tempZone/new_collection/existing_file.txt", "/tempZone/new_collection/existing_file.txt", False],
     ["/tempZone/existing_collection/existing_file.txt", "/tempZone/existing_collection/existing_file.txt", True],
 ])
 def test_copy(fs: iRODSFS, dst_path: str, result_path: str, overwrite: bool):
@@ -391,7 +424,6 @@ def test_copy(fs: iRODSFS, dst_path: str, result_path: str, overwrite: bool):
     ["/tempZone/existing_file.txt", "/tempZone/existing_collection", False, DestinationExists],
     ["not_existing.txt", "/tempZone/", False, ResourceNotFound],
     ["/tempZone/existing_collection", "/tempZone/", False, FileExpected],
-    ["/tempZone/existing_file.txt", "/tempZone/fakeFolder", False, ResourceNotFound],
     ["/tempZone/existing_file.txt", "/tempZone/fakeFolder/existing_file.txt", False, ResourceNotFound],
     ["/tempZone/existing_file.txt", "/tempZone/fakeFolder/test", False, ResourceNotFound]
 ])
@@ -408,5 +440,18 @@ def test_copy_exceptions(fs: iRODSFS, src_path: str, dst_path: str, overwrite: b
     ["/tempZone/fakeFolder", True],
     ["/tempZone/fakeFolder/test", False]
 ])
-def test_points_into_collection(fs:iRODSFS, path: str, expected: bool):
+def test_points_into_collection(fs: iRODSFS, path: str, expected: bool):
     assert fs.points_into_collection(path) == expected
+
+
+def test_walk(fs: iRODSFS):
+    walker = Walker(fs)
+    actual: List[WalkResult] = []
+
+    for path, dirs, files in walker.walk(fs, path="/tempZone/home", namespaces=["details"]):
+        actual.append(WalkResult(path, dirs, files))
+
+    assert len(actual) == 3
+    assert len(actual[0].dirs) == 2
+
+
