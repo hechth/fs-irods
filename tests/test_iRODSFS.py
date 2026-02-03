@@ -27,7 +27,7 @@ def assert_bytes(fs: iRODSFS, path: str, contents: bytes):
 
 
 @pytest.fixture
-def fs() -> Generator[iRODSFS]:
+def fs():
     builder: iRODSFSBuilder = iRODSFSBuilder().with_root("/")
     sut = builder.build()
 
@@ -51,7 +51,7 @@ def fs() -> Generator[iRODSFS]:
     del(sut)
     builder._session.cleanup()
 
-
+# Figure out why it fails when other tests have run before it
 def test_default_state():
     builder: iRODSFSBuilder = iRODSFSBuilder().with_root("/")
     sut = builder.build()
@@ -186,7 +186,19 @@ def test_copydir(fs:iRODSFS, src_path: str, dst_path: str, create: bool):
     result_path = os.path.join(dst_path, os.path.basename(src_path))
 
     assert fs.isdir(result_path)
-    assert list(fs.scandir(src_path)) == list(fs.scandir(result_path))
+
+    src_entries = list(fs.scandir(src_path))
+    dst_entries = list(fs.scandir(result_path))
+
+    # compare names (metadata like timestamps may differ)
+    assert [e.name for e in src_entries] == [e.name for e in dst_entries]
+
+    # ensure file contents were copied
+    for entry in src_entries:
+        if entry.is_file:
+            src_file = os.path.join(src_path, entry.name)
+            dst_file = os.path.join(result_path, entry.name)
+            assert fs.readbytes(src_file) == fs.readbytes(dst_file)
     
     fs.removetree(result_path)
 

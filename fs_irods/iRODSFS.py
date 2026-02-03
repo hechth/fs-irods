@@ -416,18 +416,30 @@ class iRODSFS(FS):
         src_basename = os.path.basename(src_path)
         dst = os.path.join(dst_path, src_basename)
 
+        # ensure destination root exists
+        self.makedirs(dst, recreate=True)
+
         walker = Walker(self)
 
-        for path, dirs, files in walker.walk(self, path = src_path, namespaces=["details"]):
-            for dir in dirs:
-                # this is wrong and needs to be changed -> paths have to be relative to the copying root
-                # dst_dir = os.path.join(dst, dir)
-                # self.makedir(dst_dir)
-                print(dir)
+        for path, dirs, files in walker.walk(self, path=src_path, namespaces=["details"]):
+            # compute path relative to the copy root
+            rel = os.path.relpath(path, src_path)
+            if rel == ".":
+                rel = ""
+
+            target_dir = os.path.join(dst, rel) if rel else dst
+
+            # create directories found by walker
+            for dir_name in dirs:
+                dst_dir = os.path.join(target_dir, dir_name)
+                self.makedirs(dst_dir, recreate=True)
+
+            # copy files found by walker
             for file in files:
-                # src_file = os.path.join(src_path, file.name)
-                # self.copy(src_file, dst)
-                print(file)
+                src_file = os.path.join(path, file.name)
+                dst_file = os.path.join(target_dir, file.name)
+                # overwrite any existing files in destination
+                self.copy(src_file, dst_file, overwrite=True)
     
     def upload(self, path: str, file: io.IOBase | str, chunk_size: int|None = None, **options):
         """Set a file to the contents of a binary file object.
