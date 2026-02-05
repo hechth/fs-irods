@@ -38,7 +38,6 @@ class iRODSFS(FS):
     def parent(self, path: str):
         return os.path.dirname(path)
     
-        
     def getinfo(self, path: str, namespaces: list|None = None) -> Info:
         """Get information about a resource on the filesystem.
         Args:
@@ -251,14 +250,52 @@ class iRODSFS(FS):
     
     def setinfo(self, path: str, info: dict) -> None:
         """Set information about a resource on the filesystem.
+        
+        Currently supports setting file modification and creation times via the
+        'details' namespace with 'modified' and 'created' keys containing Unix timestamps.
+        
         Args:
             path (str): A path to a resource on the filesystem.
             info (dict): A dictionary containing the information to set.
+                Expected format: {"details": {"modified": <timestamp>, "created": <timestamp>}}
+                where timestamps are Unix timestamps (seconds since epoch).
         Raises:
             ResourceNotFound: If the path does not exist.
+            FileExpected: If the path is not a file (only files support time modification).
         """
-        self._check_exists(path)           
-        raise NotImplementedError()
+        self._check_exists(path)
+        self._check_isfile(path)
+        
+        wrapped_path = self.wrap(path)
+        
+        # Extract time information from the info dict
+        meta_dict = {}
+        
+        if "details" in info:
+            details = info["details"]
+            
+            # Handle modified time (D_MODIFY_TIME)
+            if "modified" in details:
+                # Convert Unix timestamp to integer seconds
+                modified_timestamp = int(details["modified"])
+                meta_dict["dataModify"] = str(modified_timestamp)
+            
+            # Handle created time (D_CREATE_TIME)
+            if "created" in details:
+                # Convert Unix timestamp to integer seconds
+                created_timestamp = int(details["created"])
+                meta_dict["dataCreate"] = str(created_timestamp)
+        
+        # If there are no time fields to set, return early
+        if not meta_dict:
+            return
+        
+        with self._lock:
+            # Use modDataObjMeta to update the times
+            self._session.data_objects.modDataObjMeta(
+                {"objPath": wrapped_path},
+                meta_dict
+            )
 
     def _check_exists(self, path:str):
         """Check if a resource exists.
