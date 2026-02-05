@@ -19,10 +19,6 @@ from irods.data_object import iRODSDataObject
 
 from fs_irods.utils import can_create
 
-# metadata keys used to store preserved timestamps
-_PRESERVE_MOD_KEY = "fs_irods_preserved_modified"
-_PRESERVE_CRE_KEY = "fs_irods_preserved_created"
-
 _utc=datetime.timezone(datetime.timedelta(0))
 
 class iRODSFS(FS):
@@ -78,25 +74,7 @@ class iRODSFS(FS):
 
             raw_info["details"]["modified"] = data_object.modify_time.replace(tzinfo=_utc).timestamp()
             raw_info["details"]["created"] = data_object.create_time.replace(tzinfo=_utc).timestamp()
-
-            # if preserved timestamps are stored as metadata, prefer those
-            try:
-                meta = data_object.metadata
-            except Exception:
-                meta = None
-
-            if meta is not None:
-                if _PRESERVE_MOD_KEY in meta:
-                    try:
-                        raw_info["details"]["modified"] = float(meta.get_one(_PRESERVE_MOD_KEY).value)
-                    except Exception:
-                        pass
-                if _PRESERVE_CRE_KEY in meta:
-                    try:
-                        raw_info["details"]["created"] = float(meta.get_one(_PRESERVE_CRE_KEY).value)
-                    except Exception:
-                        pass
-
+          
             return Info(raw_info)
     
     def listdir(self, path: str) -> list:
@@ -386,23 +364,17 @@ class iRODSFS(FS):
             self._session.data_objects.move(self.wrap(src_path), self.wrap(dst_path))
     
     def copy(self, src_path: str, dst_path: str, overwrite: bool = False, preserve_time: bool = False):
-        """Copy a file from ``src_path`` to ``dst_path``.
+        """copy a file from one position to another
 
         Args:
-            src_path (str): Path to source file to copy.
-            dst_path (str): Destination path (file path or directory).
-            overwrite (bool, optional): If True, overwrite an existing destination file. Defaults to False.
-            preserve_time (bool, optional): If True, attempt to preserve the source file's
-                modification and creation times. The preserved timestamps are stored as AVU
-                metadata on the destination object using the keys
-                ``fs_irods_preserved_modified`` and ``fs_irods_preserved_created``. Defaults to False.
-
+            src_path (str): Path to source file to copy
+            dst_path (str): Destination
+            overwrite (bool, optional): Whether to overwrite if the destination exists. Defaults to False.
+            preserve_time (bool, optional): Whether to preserve the original modification time. Defaults to False.
         Raises:
-            DestinationExists: If ``dst_path`` exists and ``overwrite`` is ``False``.
+            DestinationExists: If ``dst_path`` exists and ``overwrite`` is `False`.
             ResourceNotFound: If a parent directory of ``dst_path`` does not exist.
             FileExpected: If ``src_path`` is not a file.
-            NotImplementedError: If ``preserve_time`` is True but the backend or permissions
-                do not allow storing preserved timestamps as metadata.
         """
         self._check_isfile(src_path)
 
@@ -421,48 +393,20 @@ class iRODSFS(FS):
             self._session.data_objects.copy(self.wrap(src_path), self.wrap(dst_path))
 
             if preserve_time:
-                    # store preserved timestamps on the destination data object as metadata
-                    try:
-                        src_info = self.getinfo(src_path)
-                        dest_obj = self._session.data_objects.get(self.wrap(dst_path))
-                        # store raw epoch timestamps (floats) as strings
-                        src_mod = src_info.get('details', 'modified')
-                        src_cre = src_info.get('details', 'created')
-                        dest_obj.metadata.set(_PRESERVE_MOD_KEY, str(src_mod))
-                        dest_obj.metadata.set(_PRESERVE_CRE_KEY, str(src_cre))
-                    except Exception:
-                        # if backend doesn't support metadata or something goes wrong, raise to notify caller
-                        raise NotImplementedError("preserve_time not supported by backend")
-                    
+                raise NotImplementedError()
+    
     def copydir(self, src_path: str, dst_path: str, create: bool = False, preserve_time: bool = False):
-        """Copy the contents of the folder ``src_path`` to ``dst_path``.
-
-        The result of the operation is that a directory named like the source basename
-        will be created under ``dst_path``. For example, copying ``/a/b`` into
-        ``/x`` will create ``/x/b`` and populate it with the contents of ``/a/b``.
+        """Copy the contents of the folder src_path to dst_path.
 
         Args:
-            src_path (str): Source directory to copy. Must be a directory.
-            dst_path (str): Destination directory under which the source-subtree will be created.
-            create (bool, optional): If ``True``, create ``dst_path`` when it does not exist.
-                Defaults to False.
-            preserve_time (bool, optional): If ``True``, attempt to preserve modification and
-                creation times for both directories and files by storing epoch timestamps
-                as AVU metadata on destination objects. The metadata keys used are
-                ``fs_irods_preserved_modified`` and ``fs_irods_preserved_created``. Defaults to False.
-
-        Behavior:
-            - Directories under ``src_path`` are recreated under ``dst_path/basename(src_path)``.
-            - Files are copied using :py:meth:`copy` with ``overwrite=True``, so existing files
-              in the destination are overwritten.
-            - When ``preserve_time`` is requested, timestamps are recorded as AVU metadata
-              on destination objects and ``getinfo`` will prefer these preserved values when present.
-
+            src_path (str): Source directory to copy.
+            dst_path (str): Where to copy the folder to.
+            create (bool, optional): Create the target directory if it does not exist. Defaults to False.
+            preserve_time (bool, optional): Perserve the modification time.
+                                            Not implemented. Defaults to False.
         Raises:
-            ResourceNotFound: If ``dst_path`` does not exist and ``create`` is ``False``.
+            ResourceNotFound: If the ``dst_path`` does not exist, and ``create`` is not `True`.
             DirectoryExpected: If ``src_path`` is not a directory.
-            NotImplementedError: If ``preserve_time`` is True but the backend or permissions
-                do not allow storing preserved timestamps as metadata.
         """
         self._check_isdir(src_path)
         if create and self.isdir(dst_path) is False:
@@ -475,16 +419,6 @@ class iRODSFS(FS):
         # ensure destination root exists
         self.makedirs(dst, recreate=True)
 
-        # preserve timestamps for root directory if requested
-        if preserve_time:
-            try:
-                src_root_info = self.getinfo(src_path)
-                coll_root = self._session.collections.get(self.wrap(dst))
-                coll_root.metadata.set(_PRESERVE_MOD_KEY, str(src_root_info.get('details','modified')))
-                coll_root.metadata.set(_PRESERVE_CRE_KEY, str(src_root_info.get('details','created')))
-            except Exception:
-                raise NotImplementedError("preserve_time not supported by backend for root directory")
-
         walker = Walker(self)
 
         for path, dirs, files in walker.walk(self, path=src_path, namespaces=["details"]):
@@ -493,35 +427,19 @@ class iRODSFS(FS):
             if rel == ".":
                 rel = ""
 
-            if rel:
-                target_dir = os.path.join(dst, rel)
-            else:
-                target_dir = dst
+            target_dir = os.path.join(dst, rel) if rel else dst
 
             # create directories found by walker
-            for dir_info in dirs:
-                dir_name = dir_info.name
+            for dir_name in dirs:
                 dst_dir = os.path.join(target_dir, dir_name)
                 self.makedirs(dst_dir, recreate=True)
-                # preserve directory timestamps if requested
-                if preserve_time:
-                    try:
-                        src_dir_info = self.getinfo(os.path.join(path, dir_name))
-                        coll = self._session.collections.get(self.wrap(dst_dir))
-                        # store raw epoch timestamps (floats) as strings
-                        src_mod = src_dir_info.get('details', 'modified')
-                        src_cre = src_dir_info.get('details', 'created')
-                        coll.metadata.set(_PRESERVE_MOD_KEY, str(src_mod))
-                        coll.metadata.set(_PRESERVE_CRE_KEY, str(src_cre))
-                    except Exception:
-                        raise NotImplementedError("preserve_time not supported by backend for directories")
 
             # copy files found by walker
             for file in files:
                 src_file = os.path.join(path, file.name)
                 dst_file = os.path.join(target_dir, file.name)
                 # overwrite any existing files in destination
-                self.copy(src_file, dst_file, overwrite=True, preserve_time=preserve_time)
+                self.copy(src_file, dst_file, overwrite=True)
     
     def upload(self, path: str, file: io.IOBase | str, chunk_size: int|None = None, **options):
         """Set a file to the contents of a binary file object.
