@@ -467,3 +467,90 @@ def test_walk(fs: iRODSFS):
     assert len(actual[0].dirs) == 2
 
 
+def test_setinfo_modify_time(fs: iRODSFS):
+    """Test setting the modification time of a file."""
+    path = "/tempZone/existing_file.txt"
+    
+    # Get original info
+    original_info = fs.getinfo(path, namespaces=["details"])
+    original_modified = original_info.raw["details"]["modified"]
+    
+    # Set a new modification time (10 minutes in the past)
+    new_modified_time = original_modified - 600  # 10 minutes earlier
+    fs.setinfo(path, {"details": {"modified": new_modified_time}})
+    
+    # Verify the modification time was updated
+    updated_info = fs.getinfo(path, namespaces=["details"])
+    assert updated_info.raw["details"]["modified"] == new_modified_time
+
+
+def test_setinfo_create_time(fs: iRODSFS):
+    """Test setting the creation time of a file."""
+    path = "/tempZone/existing_file.txt"
+    
+    # Get original info
+    original_info = fs.getinfo(path, namespaces=["details"])
+    original_created = original_info.raw["details"]["created"]
+    
+    # Set a new creation time (1 day in the past)
+    new_created_time = original_created - 86400  # 1 day earlier
+    fs.setinfo(path, {"details": {"created": new_created_time}})
+    
+    # Verify the creation time was updated
+    updated_info = fs.getinfo(path, namespaces=["details"])
+    assert updated_info.raw["details"]["created"] == new_created_time
+
+
+def test_setinfo_both_times(fs: iRODSFS):
+    """Test setting both modification and creation times of a file."""
+    path = "/tempZone/existing_file.txt"
+    
+    # Get original info
+    original_info = fs.getinfo(path, namespaces=["details"])
+    original_modified = original_info.raw["details"]["modified"]
+    original_created = original_info.raw["details"]["created"]
+    
+    # Set both times
+    new_modified_time = original_modified - 600
+    new_created_time = original_created - 86400
+    fs.setinfo(path, {
+        "details": {
+            "modified": new_modified_time,
+            "created": new_created_time
+        }
+    })
+    
+    # Verify both times were updated
+    updated_info = fs.getinfo(path, namespaces=["details"])
+    assert updated_info.raw["details"]["modified"] == new_modified_time
+    assert updated_info.raw["details"]["created"] == new_created_time
+
+
+def test_setinfo_nonexistent_file(fs: iRODSFS):
+    """Test that setinfo raises ResourceNotFound for non-existent files."""
+    with pytest.raises(ResourceNotFound):
+        fs.setinfo("/tempZone/nonexistent_file.txt", {"details": {"modified": 1000000000}})
+
+
+def test_setinfo_directory_raises_error(fs: iRODSFS):
+    """Test that setinfo raises FileExpected when called on a directory."""
+    with pytest.raises(FileExpected):
+        fs.setinfo("/tempZone/existing_collection", {"details": {"modified": 1000000000}})
+
+
+def test_setinfo_empty_info_dict(fs: iRODSFS):
+    """Test that setinfo handles empty info dict gracefully."""
+    path = "/tempZone/existing_file.txt"
+    
+    # Get original info
+    original_info = fs.getinfo(path, namespaces=["details"])
+    original_modified = original_info.raw["details"]["modified"]
+    
+    # Call setinfo with empty dict should not raise error
+    fs.setinfo(path, {})
+    
+    # Verify modification time is unchanged
+    updated_info = fs.getinfo(path, namespaces=["details"])
+    assert updated_info.raw["details"]["modified"] == original_modified
+
+
