@@ -270,20 +270,30 @@ class iRODSFS(FS):
         
         # Extract time information from the info dict
         meta_dict = {}
-        
+
         if "details" in info:
             details = info["details"]
-            
+
             # Handle modified time (D_MODIFY_TIME)
             if "modified" in details:
-                # Convert Unix timestamp to integer seconds
-                modified_timestamp = int(details["modified"])
+                # Validate and convert timestamp to integer seconds
+                try:
+                    modified_timestamp = int(details["modified"])
+                except Exception:
+                    raise ValueError("'modified' must be an integer timestamp")
+                if modified_timestamp < 0:
+                    raise ValueError("'modified' timestamp must be >= 0")
                 meta_dict["dataModify"] = str(modified_timestamp)
-            
+
             # Handle created time (D_CREATE_TIME)
             if "created" in details:
-                # Convert Unix timestamp to integer seconds
-                created_timestamp = int(details["created"])
+                # Validate and convert timestamp to integer seconds
+                try:
+                    created_timestamp = int(details["created"])
+                except Exception:
+                    raise ValueError("'created' must be an integer timestamp")
+                if created_timestamp < 0:
+                    raise ValueError("'created' timestamp must be >= 0")
                 meta_dict["dataCreate"] = str(created_timestamp)
         
         # If there are no time fields to set, return early

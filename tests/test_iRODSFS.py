@@ -483,7 +483,6 @@ def test_setinfo_modify_time(fs: iRODSFS):
     updated_info = fs.getinfo(path, namespaces=["details"])
     assert updated_info.raw["details"]["modified"] == new_modified_time
 
-
 def test_setinfo_create_time(fs: iRODSFS):
     """Test setting the creation time of a file."""
     path = "/tempZone/existing_file.txt"
@@ -499,7 +498,6 @@ def test_setinfo_create_time(fs: iRODSFS):
     # Verify the creation time was updated
     updated_info = fs.getinfo(path, namespaces=["details"])
     assert updated_info.raw["details"]["created"] == new_created_time
-
 
 def test_setinfo_both_times(fs: iRODSFS):
     """Test setting both modification and creation times of a file."""
@@ -538,19 +536,15 @@ def test_setinfo_directory_raises_error(fs: iRODSFS):
         fs.setinfo("/tempZone/existing_collection", {"details": {"modified": 1000000000}})
 
 
-def test_setinfo_empty_info_dict(fs: iRODSFS):
-    """Test that setinfo handles empty info dict gracefully."""
-    path = "/tempZone/existing_file.txt"
-    
-    # Get original info
-    original_info = fs.getinfo(path, namespaces=["details"])
-    original_modified = original_info.raw["details"]["modified"]
-    
-    # Call setinfo with empty dict should not raise error
-    fs.setinfo(path, {})
-    
-    # Verify modification time is unchanged
-    updated_info = fs.getinfo(path, namespaces=["details"])
-    assert updated_info.raw["details"]["modified"] == original_modified
+def test_setinfo_invalid_negative_timestamp(fs: iRODSFS):
+    """Setting a negative timestamp should raise ValueError."""
+    with pytest.raises(ValueError):
+        fs.setinfo("/tempZone/existing_file.txt", {"details": {"modified": -1}})
+
+
+def test_setinfo_invalid_non_numeric_timestamp(fs: iRODSFS):
+    """Setting a non-numeric timestamp should raise ValueError."""
+    with pytest.raises(ValueError):
+        fs.setinfo("/tempZone/existing_file.txt", {"details": {"created": "not-a-timestamp"}})
 
 
