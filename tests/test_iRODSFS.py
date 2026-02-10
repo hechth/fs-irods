@@ -548,3 +548,68 @@ def test_setinfo_invalid_non_numeric_timestamp(fs: iRODSFS):
         fs.setinfo("/tempZone/existing_file.txt", {"details": {"created": "not-a-timestamp"}})
 
 
+def test_setinfo_comments(fs: iRODSFS):
+    """Test setting file comments."""
+    path = "/tempZone/existing_file.txt"
+    new_comments = "This is a test comment"
+    
+    # Set comments
+    fs.setinfo(path, {"details": {"comments": new_comments}})
+    
+    # Verify comments were set correctly
+    updated_info = fs.getinfo(path, namespaces=["details"])
+    assert updated_info.raw["details"]["comments"] == new_comments
+
+
+def test_setinfo_expiry(fs: iRODSFS):
+    """Test setting the expiry/retention time."""
+    path = "/tempZone/existing_file.txt"
+    
+    # Get current time and set expiry 30 days in future
+    current_time = int(time.time())
+    expiry_time = current_time + (30 * 24 * 60 * 60)  # 30 days from now
+    
+    # Set expiry
+    fs.setinfo(path, {"details": {"expiry": expiry_time}})
+    
+    # Verify expiry was set correctly
+    updated_info = fs.getinfo(path, namespaces=["details"])
+    assert int(updated_info.raw["details"]["expiry"]) == expiry_time
+
+
+def test_setinfo_all_fields(fs: iRODSFS):
+    """Test setting multiple metadata fields at once."""
+    path = "/tempZone/existing_file.txt"
+    
+    current_time = int(time.time())
+    
+    # Set all supported fields
+    fs.setinfo(path, {
+        "details": {
+            "modified": current_time - 600,  # 10 minutes ago
+            "created": current_time - 86400,  # 1 day ago
+            "comments": "Test file with all metadata",
+            "expiry": current_time + (90 * 24 * 60 * 60)  # 90 days from now
+        }
+    })
+    
+    # Verify all fields were updated
+    updated_info = fs.getinfo(path, namespaces=["details"])
+    assert updated_info.raw["details"]["modified"] == current_time - 600
+    assert updated_info.raw["details"]["created"] == current_time - 86400
+    assert updated_info.raw["details"]["comments"] == "Test file with all metadata"
+    assert int(updated_info.raw["details"]["expiry"]) == current_time + (90 * 24 * 60 * 60)
+
+
+def test_setinfo_invalid_comments_type(fs: iRODSFS):
+    """Test that setting non-string comments raises ValueError."""
+    with pytest.raises(ValueError):
+        fs.setinfo("/tempZone/existing_file.txt", {"details": {"comments": 12345}})
+
+
+def test_setinfo_invalid_expiry_negative(fs: iRODSFS):
+    """Test that setting negative expiry raises ValueError."""
+    with pytest.raises(ValueError):
+        fs.setinfo("/tempZone/existing_file.txt", {"details": {"expiry": -1}})
+
+

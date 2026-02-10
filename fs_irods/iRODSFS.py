@@ -73,7 +73,11 @@ class iRODSFS(FS):
 
             raw_info["details"]["modified"] = data_object.modify_time.replace(tzinfo=_utc).timestamp()
             raw_info["details"]["created"] = data_object.create_time.replace(tzinfo=_utc).timestamp()
-          
+
+            raw_info["details"]["checksum"] = getattr(data_object, "checksum", None)
+            raw_info["details"]["comments"] = getattr(data_object, "comments", None)
+            raw_info["details"]["expiry"] = getattr(data_object, "expiry", None) # datatype: sting
+            
             return Info(raw_info)
     
     def listdir(self, path: str) -> list:
@@ -251,32 +255,38 @@ class iRODSFS(FS):
     def setinfo(self, path: str, info: dict) -> None:
         """Set information about a resource on the filesystem.
         
-        Currently supports setting file modification and creation times via the
-        'details' namespace with 'modified' and 'created' keys containing Unix timestamps.
+        Supports setting file metadata via the 'details' namespace including:
+        - modified: Unix timestamp for modification time
+        - created: Unix timestamp for creation time
+        - comments: Text comments/description
+        - expiry: Str timestamp for expiration/retention date
         
         Args:
             path (str): A path to a resource on the filesystem.
             info (dict): A dictionary containing the information to set.
-                Expected format: {"details": {"modified": <timestamp>, "created": <timestamp>}}
-                where timestamps are Unix timestamps (seconds since epoch).
+                Expected format: {"details": {
+                    "modified": <int timestamp>,
+                    "created": <int timestamp>,
+                    "comments": <str>,
+                    "expiry": <str timestamp>
+                }}
         Raises:
             ResourceNotFound: If the path does not exist.
-            FileExpected: If the path is not a file (only files support time modification).
+            FileExpected: If the path is not a file.
+            ValueError: If any field value is invalid.
         """
+        
         self._check_exists(path)
         self._check_isfile(path)
         
         wrapped_path = self.wrap(path)
-        
-        # Extract time information from the info dict
         meta_dict = {}
 
         if "details" in info:
             details = info["details"]
 
-            # Handle modified time (D_MODIFY_TIME)
+            # Handle modified time
             if "modified" in details:
-                # Validate and convert timestamp to integer seconds
                 try:
                     modified_timestamp = int(details["modified"])
                 except Exception:
@@ -285,9 +295,8 @@ class iRODSFS(FS):
                     raise ValueError("'modified' timestamp must be >= 0")
                 meta_dict["dataModify"] = str(modified_timestamp)
 
-            # Handle created time (D_CREATE_TIME)
+            # Handle created time
             if "created" in details:
-                # Validate and convert timestamp to integer seconds
                 try:
                     created_timestamp = int(details["created"])
                 except Exception:
@@ -295,13 +304,30 @@ class iRODSFS(FS):
                 if created_timestamp < 0:
                     raise ValueError("'created' timestamp must be >= 0")
                 meta_dict["dataCreate"] = str(created_timestamp)
+
+            # Handle comments
+            if "comments" in details:
+                comments = details["comments"]
+                if not isinstance(comments, str):
+                    raise ValueError("'comments' must be a string")
+                meta_dict["dataComments"] = comments
+
+            # Handle expiry time
+            if "expiry" in details:
+                try:
+                    expiry_timestamp = int(details["expiry"])
+                except Exception:
+                    raise ValueError("'expiry' must be an integer timestamp")
+                if expiry_timestamp < 0:
+                    raise ValueError("'expiry' timestamp must be >= 0")
+                meta_dict["dataExpiry"] = str(expiry_timestamp)
         
-        # If there are no time fields to set, return early
+        # If there are no fields to set, return early
         if not meta_dict:
             return
         
         with self._lock:
-            # Use modDataObjMeta to update the times
+            # Use modDataObjMeta to update the metadata
             self._session.data_objects.modDataObjMeta(
                 {"objPath": wrapped_path},
                 meta_dict
