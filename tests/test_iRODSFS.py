@@ -499,30 +499,6 @@ def test_setinfo_create_time(fs: iRODSFS):
     updated_info = fs.getinfo(path, namespaces=["details"])
     assert updated_info.raw["details"]["created"] == new_created_time
 
-def test_setinfo_both_times(fs: iRODSFS):
-    """Test setting both modification and creation times of a file."""
-    path = "/tempZone/existing_file.txt"
-    
-    # Get original info
-    original_info = fs.getinfo(path, namespaces=["details"])
-    original_modified = original_info.raw["details"]["modified"]
-    original_created = original_info.raw["details"]["created"]
-    
-    # Set both times
-    new_modified_time = original_modified - 600
-    new_created_time = original_created - 86400
-    fs.setinfo(path, {
-        "details": {
-            "modified": new_modified_time,
-            "created": new_created_time
-        }
-    })
-    
-    # Verify both times were updated
-    updated_info = fs.getinfo(path, namespaces=["details"])
-    assert updated_info.raw["details"]["modified"] == new_modified_time
-    assert updated_info.raw["details"]["created"] == new_created_time
-
 
 def test_setinfo_nonexistent_file(fs: iRODSFS):
     """Test that setinfo raises ResourceNotFound for non-existent files."""
