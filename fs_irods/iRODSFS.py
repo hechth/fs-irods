@@ -63,6 +63,9 @@ class iRODSFS(FS):
                 raw_info["basic"]["is_dir"] = False
                 raw_info["details"] = {"type": data_object.type}
                 raw_info["details"]["size"] = data_object.size
+                raw_info["details"]["checksum"] = getattr(data_object, "checksum", None)
+                raw_info["details"]["comments"] = getattr(data_object, "comments", None)
+                raw_info["details"]["expiry"] = getattr(data_object, "expiry", None) # datatype: string
             elif self._session.collections.exists(path):
                 data_object = self._session.collections.get(path)
                 raw_info["basic"]["is_dir"] = True
@@ -74,10 +77,6 @@ class iRODSFS(FS):
             raw_info["details"]["modified"] = data_object.modify_time.replace(tzinfo=_utc).timestamp()
             raw_info["details"]["created"] = data_object.create_time.replace(tzinfo=_utc).timestamp()
 
-            raw_info["details"]["checksum"] = getattr(data_object, "checksum", None)
-            raw_info["details"]["comments"] = getattr(data_object, "comments", None)
-            raw_info["details"]["expiry"] = getattr(data_object, "expiry", None) # datatype: sting
-            
             return Info(raw_info)
     
     def listdir(self, path: str) -> list:
@@ -515,7 +514,7 @@ class iRODSFS(FS):
                 src_file = os.path.join(path, file.name)
                 dst_file = os.path.join(target_dir, file.name)
                 # overwrite any existing files in destination
-                self.copy(src_file, dst_file, overwrite=True)
+                self.copy(src_file, dst_file, overwrite=True, preserve_time=preserve_time)
     
     def upload(self, path: str, file: io.IOBase | str, chunk_size: int|None = None, **options):
         """Set a file to the contents of a binary file object.

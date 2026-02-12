@@ -51,7 +51,7 @@ def fs():
     del(sut)
     builder._session.cleanup()
 
-# Figure out why it fails when other tests have run before it
+# When other tests have run before it -> fail
 def test_default_state():
     builder: iRODSFSBuilder = iRODSFSBuilder().with_root("/")
     sut = builder.build()
