@@ -416,6 +416,7 @@ def test_download_get(fs:iRODSFS, tmp_path):
     with(open(tmp_file)) as file:
         assert file.read() == "content"
 
+
 @pytest.mark.parametrize("dst_path, result_path, overwrite", [
     ["/tempZone/existing_file_copy.txt", "/tempZone/existing_file_copy.txt", False],
     ["/tempZone/home", "/tempZone/home/existing_file.txt", False],
@@ -428,6 +429,27 @@ def test_copy(fs: iRODSFS, dst_path: str, result_path: str, overwrite: bool):
 
     assert fs.exists(result_path)
     assert fs.readbytes(src_path) == fs.readbytes(result_path)
+
+    fs.remove(result_path)
+
+
+@pytest.mark.parametrize("dst_path, result_path, overwrite, preserve_time", [
+    ["/tempZone/existing_file_copy.txt", "/tempZone/existing_file_copy.txt", False, True],
+    ["/tempZone/home", "/tempZone/home/existing_file.txt", False, True],
+    ["/tempZone/existing_collection", "/tempZone/existing_collection/existing_file.txt", True, True],
+    ["/tempZone/existing_collection/existing_file.txt", "/tempZone/existing_collection/existing_file.txt", True, True],
+])
+def test_copy_preserve_time(fs: iRODSFS, dst_path: str, result_path: str, overwrite: bool, preserve_time: bool):
+    src_path = "/tempZone/existing_file.txt"
+    fs.copy(src_path, dst_path, overwrite, preserve_time=preserve_time)
+
+    # Get original info
+    original_info = fs.getinfo(src_path, namespaces=["details"])
+    original_modified = original_info.raw["details"]["modified"]
+
+    # Verify the modification time was updated
+    updated_info = fs.getinfo(result_path, namespaces=["details"])
+    assert updated_info.raw["details"]["modified"] == original_modified
 
     fs.remove(result_path)
 

@@ -422,7 +422,7 @@ class iRODSFS(FS):
             src_path (str): Path to the current location of the file
             dst_path (str): Path to the target location of the file
             overwrite (bool, optional): Set to True to overwrite an existing destination file. Defaults to False.
-            preserve_time (bool, optional): _description_. Defaults to False.
+            preserve_time (bool, optional): Set to True to preserve the original modification time. Defaults to False.
         Raises:
             ResourceNotFound: If the path does not exist.
             FileExpected: If the source path is not a file.
@@ -456,7 +456,7 @@ class iRODSFS(FS):
                 dst_path = os.path.join(dst_path, os.path.basename(src_path))
 
             if self.isfile(dst_path):
-                if overwrite == False:
+                if overwrite is False:
                     raise DestinationExists(dst_path)
                 self.remove(dst_path)
         else:
@@ -466,7 +466,11 @@ class iRODSFS(FS):
             self._session.data_objects.copy(self.wrap(src_path), self.wrap(dst_path))
 
             if preserve_time:
-                raise NotImplementedError()
+                src_info = self.getinfo(src_path, namespaces=["details"])
+                modified_time = src_info.raw.get("details", {}).get("modified")
+                if modified_time is not None:
+                    self.setinfo(dst_path, {"details": {"modified": int(modified_time)}})
+
     
     def copydir(self, src_path: str, dst_path: str, create: bool = False, preserve_time: bool = False):
         """Copy the contents of the folder src_path to dst_path.
