@@ -483,6 +483,7 @@ class iRODSFS(FS):
             ResourceNotFound: If the ``dst_path`` does not exist, and ``create`` is not `True`.
             DirectoryExpected: If ``src_path`` is not a directory.
         """
+
         self._check_isdir(src_path)
         if create and self.isdir(dst_path) is False:
             self.makedirs(dst_path)
@@ -505,14 +506,26 @@ class iRODSFS(FS):
             target_dir = os.path.join(dst, rel) if rel else dst
 
             # create directories found by walker
-            for dir_name in dirs:
+            for dir_entry in dirs:
+                # dir_entry may be a string name or an Info-like object
+                dir_name = dir_entry.name if not isinstance(dir_entry, str) else dir_entry
                 dst_dir = os.path.join(target_dir, dir_name)
                 self.makedirs(dst_dir, recreate=True)
 
+                if preserve_time:
+                    # get info from source directory (path is the current source dir)
+                    src_dir = os.path.join(path, dir_name)
+                    src_info = self.getinfo(src_dir, namespaces=["details"])
+                    modified_time = src_info.raw.get("details", {}).get("modified")
+                    if modified_time is not None:
+                        self.setinfo(dst_dir, {"details": {"modified": int(modified_time)}})
+                        
             # copy files found by walker
-            for file in files:
-                src_file = os.path.join(path, file.name)
-                dst_file = os.path.join(target_dir, file.name)
+            for file_entry in files:
+                # file_entry may be a string name or an Info-like object
+                file_name = file_entry.name if not isinstance(file_entry, str) else file_entry
+                src_file = os.path.join(path, file_name)
+                dst_file = os.path.join(target_dir, file_name)
                 # overwrite any existing files in destination
                 self.copy(src_file, dst_file, overwrite=True, preserve_time=preserve_time)
     
