@@ -485,15 +485,15 @@ class iRODSFS(FS):
         """
 
         self._check_isdir(src_path)
-        if create and self.isdir(dst_path) is False:
-            self.makedirs(dst_path)
-        self._check_isdir(dst_path)
-
+    
         src_basename = os.path.basename(src_path)
         dst = os.path.join(dst_path, src_basename)
 
-        # ensure destination root exists
-        self.makedirs(dst, recreate=True)
+        if not self.isdir(dst):
+            if create or self.isdir(dst_path):
+                self.makedirs(dst, recreate=True)
+            else:
+                raise ResourceNotFound(dst_path)
 
         walker = Walker(self)
 
@@ -505,28 +505,26 @@ class iRODSFS(FS):
 
             target_dir = os.path.join(dst, rel) if rel else dst
 
-            # create directories found by walker
             for dir_entry in dirs:
                 # dir_entry may be a string name or an Info-like object
-                dir_name = dir_entry.name if not isinstance(dir_entry, str) else dir_entry
+                dir_name = getattr(dir_entry, "name", dir_entry)
+                dir_name = str(dir_name)
                 dst_dir = os.path.join(target_dir, dir_name)
                 self.makedirs(dst_dir, recreate=True)
 
                 if preserve_time:
-                    # get info from source directory (path is the current source dir)
                     src_dir = os.path.join(path, dir_name)
                     src_info = self.getinfo(src_dir, namespaces=["details"])
                     modified_time = src_info.raw.get("details", {}).get("modified")
                     if modified_time is not None:
                         self.setinfo(dst_dir, {"details": {"modified": int(modified_time)}})
                         
-            # copy files found by walker
             for file_entry in files:
                 # file_entry may be a string name or an Info-like object
-                file_name = file_entry.name if not isinstance(file_entry, str) else file_entry
+                file_name = getattr(file_entry, "name", file_entry)
+                file_name = str(file_name)
                 src_file = os.path.join(path, file_name)
                 dst_file = os.path.join(target_dir, file_name)
-                # overwrite any existing files in destination
                 self.copy(src_file, dst_file, overwrite=True, preserve_time=preserve_time)
     
     def upload(self, path: str, file: io.IOBase | str, chunk_size: int|None = None, **options):
