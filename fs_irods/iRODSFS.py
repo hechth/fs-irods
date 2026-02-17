@@ -479,8 +479,7 @@ class iRODSFS(FS):
             src_path (str): Source directory to copy.
             dst_path (str): Where to copy the folder to.
             create (bool, optional): Create the target directory if it does not exist. Defaults to False.
-            preserve_time (bool, optional): Perserve the modification time.
-                                            Not implemented. Defaults to False.
+            preserve_time (bool, optional): Perserve the modification time. Defaults to False.
         Raises:
             ResourceNotFound: If the ``dst_path`` does not exist, and ``create`` is not `True`.
             DirectoryExpected: If ``src_path`` is not a directory.
