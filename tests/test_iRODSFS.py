@@ -136,13 +136,23 @@ def test_create_exceptions(fs: iRODSFS, path: str, exception: Exception):
 ])
 def test_get_info(fs: iRODSFS, path: str, is_dir: bool):
     info = fs.getinfo(path)
+    
     assert info.name == os.path.basename(path)
     assert info.is_dir == is_dir
     assert info.is_file != is_dir
-
+    
     assert info.modified is not None
     assert info.created is not None
-    assert info.accessed  is None
+    assert info.accessed is None
+    
+    if is_dir is False:
+        assert info.raw["details"]["type"] is not None
+        assert "size" in info.raw["details"]
+        assert "checksum" in info.raw["details"]
+        assert "comments" in info.raw["details"]
+        assert "expiry" in info.raw["details"]
+    
+    assert info.raw["access"]["user"] is not None
 
 
 @pytest.mark.parametrize("path, expected", [
