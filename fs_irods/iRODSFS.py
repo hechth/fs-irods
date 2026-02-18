@@ -252,27 +252,18 @@ class iRODSFS(FS):
             raise DirectoryExpected(path)
     
     def setinfo(self, path: str, info: dict) -> None:
-        """Set information about a resource on the filesystem.
-        
-        Supports setting file metadata via the 'details' namespace including:
-        - modified: Unix timestamp for modification time
-        - created: Unix timestamp for creation time
-        - comments: Text comments/description
-        - expiry: Str timestamp for expiration/retention date
+        """Set metadata for a file.
         
         Args:
-            path (str): A path to a resource on the filesystem.
-            info (dict): A dictionary containing the information to set.
-                Expected format: {"details": {
-                    "modified": <int timestamp>,
-                    "created": <int timestamp>,
-                    "comments": <str>,
-                    "expiry": <str timestamp>
-                }}
+            path (str): Path to a file on the filesystem.
+            info (dict): Dictionary with metadata. Format: 
+            {"details": {"modified": <int>, "created": <int>, 
+                     "comments": <str>, "expiry": <str>}}
+        
         Raises:
             ResourceNotFound: If the path does not exist.
             FileExpected: If the path is not a file.
-            ValueError: If any field value is invalid.
+            ValueError: If field values are invalid.
         """
         
         self._check_exists(path)
@@ -288,7 +279,7 @@ class iRODSFS(FS):
             if "created" in details:
                 meta_dict["dataCreate"] = self._validate_and_format_timestamp(details["created"], "created")
             if "expiry" in details:
-                meta_dict["dataExpiry"] = self._validate_and_format_timestamp(details["expiry"], "expiry")
+                meta_dict["dataExpiry"] = str(self._validate_and_format_timestamp(details["expiry"], "expiry"))
             if "comments" in details:
                 comments = details["comments"]
                 if not isinstance(comments, str):
@@ -307,10 +298,15 @@ class iRODSFS(FS):
                 meta_dict
             )
 
-    def _validate_and_format_timestamp(self, value, field_name: str) -> str:
+    def _validate_and_format_timestamp(self, value, field_name: str) -> int:
         """Validate that `value` can be parsed as a non-negative int timestamp.
-
-        Returns the stringified integer timestamp on success, raises ValueError on failure.
+        Args:
+            value (dict): The value to validate and format.
+            field_name (str): The name of the field being validated (for error messages).
+        Returns:
+            int: The integer timestamp.
+        Raises:
+            ValueError: If `value` is not an integer or is negative.
         """
         try:
             ts = int(value)
@@ -318,7 +314,7 @@ class iRODSFS(FS):
             raise ValueError(f"'{field_name}' must be an integer timestamp")
         if ts < 0:
             raise ValueError(f"'{field_name}' timestamp must be >= 0")
-        return str(ts)
+        return ts
 
     def _check_exists(self, path:str):
         """Check if a resource exists.
