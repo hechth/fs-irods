@@ -283,43 +283,18 @@ class iRODSFS(FS):
 
         if "details" in info:
             details = info["details"]
-
-            # Handle modified time
             if "modified" in details:
-                try:
-                    modified_timestamp = int(details["modified"])
-                except Exception:
-                    raise ValueError("'modified' must be an integer timestamp")
-                if modified_timestamp < 0:
-                    raise ValueError("'modified' timestamp must be >= 0")
-                meta_dict["dataModify"] = str(modified_timestamp)
-
-            # Handle created time
+                meta_dict["dataModify"] = self._validate_and_format_timestamp(details["modified"], "modified")
             if "created" in details:
-                try:
-                    created_timestamp = int(details["created"])
-                except Exception:
-                    raise ValueError("'created' must be an integer timestamp")
-                if created_timestamp < 0:
-                    raise ValueError("'created' timestamp must be >= 0")
-                meta_dict["dataCreate"] = str(created_timestamp)
-
-            # Handle comments
+                meta_dict["dataCreate"] = self._validate_and_format_timestamp(details["created"], "created")
+            if "expiry" in details:
+                meta_dict["dataExpiry"] = self._validate_and_format_timestamp(details["expiry"], "expiry")
             if "comments" in details:
                 comments = details["comments"]
                 if not isinstance(comments, str):
                     raise ValueError("'comments' must be a string")
                 meta_dict["dataComments"] = comments
-
-            # Handle expiry time
-            if "expiry" in details:
-                try:
-                    expiry_timestamp = int(details["expiry"])
-                except Exception:
-                    raise ValueError("'expiry' must be an integer timestamp")
-                if expiry_timestamp < 0:
-                    raise ValueError("'expiry' timestamp must be >= 0")
-                meta_dict["dataExpiry"] = str(expiry_timestamp)
+            
         
         # If there are no fields to set, return early
         if not meta_dict:
@@ -331,6 +306,19 @@ class iRODSFS(FS):
                 {"objPath": wrapped_path},
                 meta_dict
             )
+
+    def _validate_and_format_timestamp(self, value, field_name: str) -> str:
+        """Validate that `value` can be parsed as a non-negative int timestamp.
+
+        Returns the stringified integer timestamp on success, raises ValueError on failure.
+        """
+        try:
+            ts = int(value)
+        except Exception:
+            raise ValueError(f"'{field_name}' must be an integer timestamp")
+        if ts < 0:
+            raise ValueError(f"'{field_name}' timestamp must be >= 0")
+        return str(ts)
 
     def _check_exists(self, path:str):
         """Check if a resource exists.
@@ -465,12 +453,21 @@ class iRODSFS(FS):
             self._session.data_objects.copy(self.wrap(src_path), self.wrap(dst_path))
 
             if preserve_time:
-                src_info = self.getinfo(src_path, namespaces=["details"])
-                modified_time = src_info.raw.get("details", {}).get("modified")
-                if modified_time is not None:
-                    self.setinfo(dst_path, {"details": {"modified": int(modified_time)}})
+                self._preserve_modified_time(src_path, dst_path)
 
-    
+    def _preserve_modified_time(self, src_path: str, dst_path: str) -> None:
+        """
+        Copy the modified time field from src to dst if present
+        
+        Args:
+            src_path (str): Source path to copy modified time from
+            dst_path (str): Destination path to copy modified time to
+        """
+        src_info = self.getinfo(src_path, namespaces=["details"])
+        modified_time = src_info.raw.get("details", {}).get("modified")
+        if modified_time is not None:
+            self.setinfo(dst_path, {"details": {"modified": int(modified_time)}})
+
     def copydir(self, src_path: str, dst_path: str, create: bool = False, preserve_time: bool = False):
         """Copy the contents of the folder src_path to dst_path.
 
@@ -514,10 +511,7 @@ class iRODSFS(FS):
 
                 if preserve_time:
                     src_dir = os.path.join(path, dir_name)
-                    src_info = self.getinfo(src_dir, namespaces=["details"])
-                    modified_time = src_info.raw.get("details", {}).get("modified")
-                    if modified_time is not None:
-                        self.setinfo(dst_dir, {"details": {"modified": int(modified_time)}})
+                    self._preserve_modified_time(src_dir, dst_dir)
                         
             for file_entry in files:
                 # file_entry may be a string name or an Info-like object
