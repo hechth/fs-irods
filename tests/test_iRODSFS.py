@@ -483,6 +483,29 @@ def test_move_exceptions(fs:iRODSFS, source: str, dest: str, overwrite:bool, exc
     with pytest.raises(exception):
         fs.move(source, dest, overwrite=overwrite)
 
+@pytest.mark.parametrize("src_path, dst_path, create_dst, expected_result_path", [
+    ["/tempZone/testdir", "/tempZone/newdir", False, "/tempZone/newdir/file.txt"],
+    ["/tempZone/testdir", "/tempZone/newdir", True, "/tempZone/newdir/testdir/file.txt"],
+])
+def test_movedir(fs: iRODSFS, src_path: str, dst_path: str, create_dst: bool, expected_result_path: str):
+    if fs.exists(src_path):
+        fs.removetree(src_path)
+    if fs.exists(dst_path):
+        fs.removetree(dst_path)
+    
+    fs.makedirs(src_path)
+    fs.writetext(f"{src_path}/file.txt", "test")
+    
+    # optionally create destination directory first
+    if create_dst:
+        fs.makedirs(dst_path)
+    
+    fs.movedir(src_path, dst_path, overwrite=True)
+    
+    assert fs.isdir(os.path.dirname(expected_result_path))
+    assert fs.isfile(expected_result_path)
+    assert fs.readtext(expected_result_path) == "test"
+    fs.removetree(dst_path)
 
 @pytest.mark.parametrize("path, content",[
     ["/tempZone/existing_file.txt", "test"]

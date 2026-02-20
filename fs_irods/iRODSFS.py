@@ -253,13 +253,11 @@ class iRODSFS(FS):
     
     def setinfo(self, path: str, info: dict) -> None:
         """Set metadata for a file.
-        
         Args:
             path (str): Path to a file on the filesystem.
             info (dict): Dictionary with metadata. Format: 
             {"details": {"modified": <int>, "created": <int>, 
-                     "comments": <str>, "expiry": <str>}}
-        
+                    "expiry": <str>, "comments": <str>}}
         Raises:
             ResourceNotFound: If the path does not exist.
             FileExpected: If the path is not a file.
@@ -286,7 +284,6 @@ class iRODSFS(FS):
                     raise ValueError("'comments' must be a string")
                 meta_dict["dataComments"] = comments
             
-        
         # If there are no fields to set, return early
         if not meta_dict:
             return
@@ -418,7 +415,39 @@ class iRODSFS(FS):
             raise DestinationExists(dst_path)
         with self._lock:
             self._session.data_objects.move(self.wrap(src_path), self.wrap(dst_path))
-    
+            if preserve_time:
+                self._preserve_modified_time(src_path, dst_path)
+        
+    def movedir(self, src_path: str, dst_path: str, overwrite: bool = False, preserve_time: bool = False) -> None:
+        """Move a directory to the specified location
+
+        Args:
+            src_path (str): Path to the current location of the directory
+            dst_path (str): Path to the target location of the directory
+            overwrite (bool, optional): Set to True to overwrite an existing destination directory. Defaults to False.
+            preserve_time (bool, optional): Set to True to preserve the original modification time. Defaults to False.
+        Raises:
+            ResourceNotFound: If the source path does not exist.
+            DirectoryExpected: If the source path is not a directory.
+            DestinationExists: If destination path exists and overwrite is False.
+        """
+        self._check_exists(src_path)
+        self._check_isdir(src_path)
+
+        if self.exists(dst_path) and not overwrite:
+            raise DestinationExists(dst_path)
+        
+        # Get the source info before moving if we need to preserve time
+        src_info = None
+        if preserve_time:
+            src_info = self.getinfo(src_path, namespaces=["details"])
+        
+        with self._lock:
+            self._session.collections.move(self.wrap(src_path), self.wrap(dst_path))
+            
+            if preserve_time and src_info:
+                self._preserve_modified_time(src_path, dst_path)
+
     def copy(self, src_path: str, dst_path: str, overwrite: bool = False, preserve_time: bool = False):
         """copy a file from one position to another
 
