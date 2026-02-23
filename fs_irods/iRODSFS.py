@@ -63,9 +63,9 @@ class iRODSFS(FS):
                 raw_info["basic"]["is_dir"] = False
                 raw_info["details"] = {"type": data_object.type}
                 raw_info["details"]["size"] = data_object.size
-                raw_info["details"]["checksum"] = getattr(data_object, "checksum", None)
-                raw_info["details"]["comments"] = getattr(data_object, "comments", None)
-                raw_info["details"]["expiry"] = getattr(data_object, "expiry", None) # datatype: string
+                raw_info["details"]["checksum"] = data_object.checksum
+                raw_info["details"]["comments"] = data_object.comments
+                raw_info["details"]["expiry"] = data_object.expiry # datatype: string
             elif self._session.collections.exists(path):
                 data_object = self._session.collections.get(path)
                 raw_info["basic"]["is_dir"] = True
