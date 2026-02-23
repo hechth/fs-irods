@@ -2,6 +2,7 @@
 *.egg-info
 *.eggs
 .ipynb_checkpoints
+poetry.lock
 
 build
 dist
@@ -29,3 +30,4 @@ env
 env3
 venv
 venv3
+.venv

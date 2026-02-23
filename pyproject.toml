@@ -9,7 +9,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "fs-irods"
-version = "0.1.0"
+version = "0.2.0"
 description = "PyFilesystem2 extension for iRODS"
 authors = ["Helge Hecht <helge.hecht@recetox.muni.cz>"]
 readme = "README.md"
@@ -20,10 +20,14 @@ keywords = [
 ]
 license = "MIT"
 
+[[tool.poetry.source]]
+name = "pypi-public"
+url = "https://pypi.org/simple/"
+
 [tool.poetry.dependencies]
-python = "^3.8"
+python = "^3.9"
 fs = "^2.4.16"
-python-irodsclient = "^1.1.9"
+python-irodsclient = "^3.0.0"
 
 
 [tool.poetry.group.dev.dependencies]
@@ -33,6 +37,8 @@ twine = "^4.0.2"
 build = "^1.0.3"
 ruff = "^0.1.5"
 pytest-mock = "^3.12.0"
+jupyter = "^1.1.1"
+poetry-bumpversion = "^0.3.3"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -125,3 +131,6 @@ line-length = 120
 known-first-party = ["fs_irods"]
 force-single-line = true
 no-lines-before = ["future","standard-library","third-party","first-party","local-folder"]
+
+[tool.poetry_bumpversion.file."fs_irods/__init__.py"]
+# Duplicate the line above to add more files
