@@ -27,7 +27,7 @@ url = "https://pypi.org/simple/"
 [tool.poetry.dependencies]
 python = "^3.9"
 fs = "^2.4.16"
-python-irodsclient = "^3.0.0"
+python-irodsclient = "^3.2.0"
 
 
 [tool.poetry.group.dev.dependencies]
