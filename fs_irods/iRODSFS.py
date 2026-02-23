@@ -38,7 +38,6 @@ class iRODSFS(FS):
     def parent(self, path: str):
         return os.path.dirname(path)
     
-        
     def getinfo(self, path: str, namespaces: list|None = None) -> Info:
         """Get information about a resource on the filesystem.
         Args:
@@ -64,6 +63,9 @@ class iRODSFS(FS):
                 raw_info["basic"]["is_dir"] = False
                 raw_info["details"] = {"type": data_object.type}
                 raw_info["details"]["size"] = data_object.size
+                raw_info["details"]["checksum"] = data_object.checksum
+                raw_info["details"]["comments"] = data_object.comments
+                raw_info["details"]["expiry"] = data_object.expiry # datatype: string
             elif self._session.collections.exists(path):
                 data_object = self._session.collections.get(path)
                 raw_info["basic"]["is_dir"] = True
@@ -74,7 +76,7 @@ class iRODSFS(FS):
 
             raw_info["details"]["modified"] = data_object.modify_time.replace(tzinfo=_utc).timestamp()
             raw_info["details"]["created"] = data_object.create_time.replace(tzinfo=_utc).timestamp()
-          
+
             return Info(raw_info)
     
     def listdir(self, path: str) -> list:
@@ -251,14 +253,84 @@ class iRODSFS(FS):
     
     def setinfo(self, path: str, info: dict) -> None:
         """Set information about a resource on the filesystem.
+        
+        Supports setting file metadata via the 'details' namespace including:
+        - modified: Unix timestamp for modification time
+        - created: Unix timestamp for creation time
+        - comments: Text comments/description
+        - expiry: Str timestamp for expiration/retention date
+        
         Args:
             path (str): A path to a resource on the filesystem.
             info (dict): A dictionary containing the information to set.
+                Expected format: {"details": {
+                    "modified": <int timestamp>,
+                    "created": <int timestamp>,
+                    "comments": <str>,
+                    "expiry": <str timestamp>
+                }}
         Raises:
             ResourceNotFound: If the path does not exist.
+            FileExpected: If the path is not a file.
+            ValueError: If any field value is invalid.
         """
-        self._check_exists(path)           
-        raise NotImplementedError()
+        
+        self._check_exists(path)
+        self._check_isfile(path)
+        
+        wrapped_path = self.wrap(path)
+        meta_dict = {}
+
+        if "details" in info:
+            details = info["details"]
+
+            # Handle modified time
+            if "modified" in details:
+                try:
+                    modified_timestamp = int(details["modified"])
+                except Exception:
+                    raise ValueError("'modified' must be an integer timestamp")
+                if modified_timestamp < 0:
+                    raise ValueError("'modified' timestamp must be >= 0")
+                meta_dict["dataModify"] = str(modified_timestamp)
+
+            # Handle created time
+            if "created" in details:
+                try:
+                    created_timestamp = int(details["created"])
+                except Exception:
+                    raise ValueError("'created' must be an integer timestamp")
+                if created_timestamp < 0:
+                    raise ValueError("'created' timestamp must be >= 0")
+                meta_dict["dataCreate"] = str(created_timestamp)
+
+            # Handle comments
+            if "comments" in details:
+                comments = details["comments"]
+                if not isinstance(comments, str):
+                    raise ValueError("'comments' must be a string")
+                meta_dict["dataComments"] = comments
+
+            # Handle expiry time
+            if "expiry" in details:
+                try:
+                    expiry_timestamp = int(details["expiry"])
+                except Exception:
+                    raise ValueError("'expiry' must be an integer timestamp")
+                if expiry_timestamp < 0:
+                    raise ValueError("'expiry' timestamp must be >= 0")
+                meta_dict["dataExpiry"] = str(expiry_timestamp)
+        
+        # If there are no fields to set, return early
+        if not meta_dict:
+            return
+        
+        with self._lock:
+            # Use modDataObjMeta to update the metadata
+            self._session.data_objects.modDataObjMeta(
+                {"objPath": wrapped_path},
+                meta_dict
+            )
 
     def _check_exists(self, path:str):
         """Check if a resource exists.
@@ -349,7 +421,7 @@ class iRODSFS(FS):
             src_path (str): Path to the current location of the file
             dst_path (str): Path to the target location of the file
             overwrite (bool, optional): Set to True to overwrite an existing destination file. Defaults to False.
-            preserve_time (bool, optional): _description_. Defaults to False.
+            preserve_time (bool, optional): Set to True to preserve the original modification time. Defaults to False.
         Raises:
             ResourceNotFound: If the path does not exist.
             FileExpected: If the source path is not a file.
@@ -383,7 +455,7 @@ class iRODSFS(FS):
                 dst_path = os.path.join(dst_path, os.path.basename(src_path))
 
             if self.isfile(dst_path):
-                if overwrite == False:
+                if overwrite is False:
                     raise DestinationExists(dst_path)
                 self.remove(dst_path)
         else:
@@ -393,7 +465,11 @@ class iRODSFS(FS):
             self._session.data_objects.copy(self.wrap(src_path), self.wrap(dst_path))
 
             if preserve_time:
-                raise NotImplementedError()
+                src_info = self.getinfo(src_path, namespaces=["details"])
+                modified_time = src_info.raw.get("details", {}).get("modified")
+                if modified_time is not None:
+                    self.setinfo(dst_path, {"details": {"modified": int(modified_time)}})
+
     
     def copydir(self, src_path: str, dst_path: str, create: bool = False, preserve_time: bool = False):
         """Copy the contents of the folder src_path to dst_path.
@@ -402,32 +478,54 @@ class iRODSFS(FS):
             src_path (str): Source directory to copy.
             dst_path (str): Where to copy the folder to.
             create (bool, optional): Create the target directory if it does not exist. Defaults to False.
-            preserve_time (bool, optional): Perserve the modification time.
-                                            Not implemented. Defaults to False.
+            preserve_time (bool, optional): Perserve the modification time. Defaults to False.
         Raises:
             ResourceNotFound: If the ``dst_path`` does not exist, and ``create`` is not `True`.
             DirectoryExpected: If ``src_path`` is not a directory.
         """
-        self._check_isdir(src_path)
-        if create and self.isdir(dst_path) is False:
-            self.makedirs(dst_path)
-        self._check_isdir(dst_path)
 
+        self._check_isdir(src_path)
+    
         src_basename = os.path.basename(src_path)
         dst = os.path.join(dst_path, src_basename)
 
+        if not self.isdir(dst):
+            if create or self.isdir(dst_path):
+                self.makedirs(dst, recreate=True)
+            else:
+                raise ResourceNotFound(dst_path)
+
         walker = Walker(self)
 
-        for path, dirs, files in walker.walk(self, path = src_path, namespaces=["details"]):
-            for dir in dirs:
-                # this is wrong and needs to be changed -> paths have to be relative to the copying root
-                # dst_dir = os.path.join(dst, dir)
-                # self.makedir(dst_dir)
-                print(dir)
-            for file in files:
-                # src_file = os.path.join(src_path, file.name)
-                # self.copy(src_file, dst)
-                print(file)
+        for path, dirs, files in walker.walk(self, path=src_path, namespaces=["details"]):
+            # compute path relative to the copy root
+            rel = os.path.relpath(path, src_path)
+            if rel == ".":
+                rel = ""
+
+            target_dir = os.path.join(dst, rel) if rel else dst
+
+            for dir_entry in dirs:
+                # dir_entry may be a string name or an Info-like object
+                dir_name = getattr(dir_entry, "name", dir_entry)
+                dir_name = str(dir_name)
+                dst_dir = os.path.join(target_dir, dir_name)
+                self.makedirs(dst_dir, recreate=True)
+
+                if preserve_time:
+                    src_dir = os.path.join(path, dir_name)
+                    src_info = self.getinfo(src_dir, namespaces=["details"])
+                    modified_time = src_info.raw.get("details", {}).get("modified")
+                    if modified_time is not None:
+                        self.setinfo(dst_dir, {"details": {"modified": int(modified_time)}})
+                        
+            for file_entry in files:
+                # file_entry may be a string name or an Info-like object
+                file_name = getattr(file_entry, "name", file_entry)
+                file_name = str(file_name)
+                src_file = os.path.join(path, file_name)
+                dst_file = os.path.join(target_dir, file_name)
+                self.copy(src_file, dst_file, overwrite=True, preserve_time=preserve_time)
     
     def upload(self, path: str, file: io.IOBase | str, chunk_size: int|None = None, **options):
         """Set a file to the contents of a binary file object.
