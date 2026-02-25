@@ -453,7 +453,9 @@ class iRODSFS(FS):
         
         # Apply preserved times after move
         if preserve_time and metadata:
-            self._apply_directory_tree_metadata(dst_path, metadata)
+            for rel_path, modified_time in metadata.items():
+                path = os.path.join(dst_path, rel_path)
+                self.setinfo(path, {"details": {"modified": int(modified_time)}})
 
     def copy(self, src_path: str, dst_path: str, overwrite: bool = False, preserve_time: bool = False):
         """copy a file from one position to another
@@ -550,22 +552,6 @@ class iRODSFS(FS):
                     pass  # Skip if we can't get metadata
         
         return metadata
-
-    def _apply_directory_tree_metadata(self, dst_path: str, metadata: dict) -> None:
-        """
-        Recursively apply collected modification time metadata to files and directories in a directory tree.
-        
-        Args:
-            dst_path (str): Root directory where metadata should be applied
-            metadata (dict): Dictionary mapping relative paths to modification times
-        """
-        for rel_path, modified_time in metadata.items():
-            full_path = os.path.join(dst_path, rel_path)
-            try:
-                if self.exists(full_path):
-                    self.setinfo(full_path, {"details": {"modified": int(modified_time)}})
-            except:
-                pass  # Skip if we can't set metadata
 
     def copydir(self, src_path: str, dst_path: str, create: bool = False, preserve_time: bool = False):
         """Copy the contents of the folder src_path to dst_path.
