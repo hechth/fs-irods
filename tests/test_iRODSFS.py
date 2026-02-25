@@ -642,7 +642,6 @@ def test_setinfo_time_fields(fs: iRODSFS, field: str, time_offset: int):
 
 @pytest.mark.parametrize("path, exception, field, value", [
     ["/tempZone/nonexistent_file.txt", ResourceNotFound, "modified", 1000000000],
-    ["/tempZone/existing_collection", FileExpected, "modified", 1000000000],
 ])
 def test_setinfo_exceptions(fs: iRODSFS, path: str, exception: Exception, field: str, value):
     """Test that setinfo raises appropriate exceptions for invalid inputs."""

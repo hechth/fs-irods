@@ -252,20 +252,18 @@ class iRODSFS(FS):
             raise DirectoryExpected(path)
     
     def setinfo(self, path: str, info: dict) -> None:
-        """Set metadata for a file.
+        """Set metadata for a file or directory.
         Args:
-            path (str): Path to a file on the filesystem.
+            path (str): Path to a file or directory on the filesystem.
             info (dict): Dictionary with metadata. Format: 
             {"details": {"modified": <int>, "created": <int>, 
                     "expiry": <str>, "comments": <str>}}
         Raises:
             ResourceNotFound: If the path does not exist.
-            FileExpected: If the path is not a file.
             ValueError: If field values are invalid.
         """
         
         self._check_exists(path)
-        self._check_isfile(path)
         
         wrapped_path = self.wrap(path)
         meta_dict = {}
@@ -289,11 +287,19 @@ class iRODSFS(FS):
             return
         
         with self._lock:
-            # Use modDataObjMeta to update the metadata
-            self._session.data_objects.modDataObjMeta(
-                {"objPath": wrapped_path},
-                meta_dict
-            )
+            # Use modDataObjMeta for files and touch for collections (directories)
+            if self.isfile(path):
+                self._session.data_objects.modDataObjMeta(
+                    {"objPath": wrapped_path},
+                    meta_dict
+                )
+            elif self.isdir(path):
+                # For collections, use touch to update modification time
+                if "dataModify" in meta_dict:
+                    self._session.collections.touch(
+                        wrapped_path,
+                        seconds_since_epoch=meta_dict["dataModify"]
+                    )
 
     def _validate_and_format_timestamp(self, value, field_name: str) -> int:
         """Validate that `value` can be parsed as a non-negative int timestamp.
@@ -437,16 +443,17 @@ class iRODSFS(FS):
         if self.exists(dst_path) and not overwrite:
             raise DestinationExists(dst_path)
         
-        # Get the source info before moving if we need to preserve time
-        src_info = None
+        # Collect metadata before moving if we need to preserve times
+        metadata = {}
         if preserve_time:
-            src_info = self.getinfo(src_path, namespaces=["details"])
+            metadata = self._collect_directory_tree_metadata(src_path)
         
         with self._lock:
             self._session.collections.move(self.wrap(src_path), self.wrap(dst_path))
-            
-            if preserve_time and src_info:
-                self._preserve_modified_time(src_path, dst_path)
+        
+        # Apply preserved times after move
+        if preserve_time and metadata:
+            self._apply_directory_tree_metadata(dst_path, metadata)
 
     def copy(self, src_path: str, dst_path: str, overwrite: bool = False, preserve_time: bool = False):
         """copy a file from one position to another
@@ -493,6 +500,73 @@ class iRODSFS(FS):
         if modified_time is not None:
             self.setinfo(dst_path, {"details": {"modified": int(modified_time)}})
 
+    def _collect_directory_tree_metadata(self, src_path: str) -> dict:
+        """
+        Recursively collect modification time metadata for all files and directories in a directory tree.
+        
+        Args:
+            src_path (str): Root directory to collect metadata from
+            
+        Returns:
+            dict: Dictionary mapping relative paths to their modification times
+        """
+        metadata = {}
+        walker = Walker(self)
+        
+        for path, dirs, files in walker.walk(self, path=src_path, namespaces=["details"]):
+            # Compute path relative to the source root
+            rel = os.path.relpath(path, src_path)
+            if rel == ".":
+                rel = ""
+            
+            # Collect metadata for directories (before files)
+            for dir_entry in dirs:
+                dir_name = getattr(dir_entry, "name", dir_entry)
+                dir_name = str(dir_name)
+                src_dir = os.path.join(path, dir_name)
+                rel_dir = os.path.join(rel, dir_name) if rel else dir_name
+                
+                try:
+                    info = self.getinfo(src_dir, namespaces=["details"])
+                    modified_time = info.raw.get("details", {}).get("modified")
+                    if modified_time is not None:
+                        metadata[rel_dir] = modified_time
+                except:
+                    pass  # Skip if we can't get metadata
+            
+            # Collect metadata for files
+            for file_entry in files:
+                file_name = getattr(file_entry, "name", file_entry)
+                file_name = str(file_name)
+                src_file = os.path.join(path, file_name)
+                rel_file = os.path.join(rel, file_name) if rel else file_name
+                
+                try:
+                    info = self.getinfo(src_file, namespaces=["details"])
+                    modified_time = info.raw.get("details", {}).get("modified")
+                    if modified_time is not None:
+                        metadata[rel_file] = modified_time
+                except:
+                    pass  # Skip if we can't get metadata
+        
+        return metadata
+
+    def _apply_directory_tree_metadata(self, dst_path: str, metadata: dict) -> None:
+        """
+        Recursively apply collected modification time metadata to files and directories in a directory tree.
+        
+        Args:
+            dst_path (str): Root directory where metadata should be applied
+            metadata (dict): Dictionary mapping relative paths to modification times
+        """
+        for rel_path, modified_time in metadata.items():
+            full_path = os.path.join(dst_path, rel_path)
+            try:
+                if self.exists(full_path):
+                    self.setinfo(full_path, {"details": {"modified": int(modified_time)}})
+            except:
+                pass  # Skip if we can't set metadata
+
     def copydir(self, src_path: str, dst_path: str, create: bool = False, preserve_time: bool = False):
         """Copy the contents of the folder src_path to dst_path.
 
@@ -537,7 +611,7 @@ class iRODSFS(FS):
                 if preserve_time:
                     src_dir = os.path.join(path, dir_name)
                     self._preserve_modified_time(src_dir, dst_dir)
-                        
+            
             for file_entry in files:
                 # file_entry may be a string name or an Info-like object
                 file_name = getattr(file_entry, "name", file_entry)
