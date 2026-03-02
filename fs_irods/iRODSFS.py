@@ -589,7 +589,8 @@ class iRODSFS(FS):
                 dst_dir = os.path.join(target_dir, dir_name)
                 self.makedirs(dst_dir, recreate=True)
                 if preserve_time:
-                    self._preserve_modified_time(path, dst_dir)
+                    src_dir = os.path.join(path, dir_name)
+                    self._preserve_modified_time(src_dir, dst_dir)
             for file_entry in files:
                 file_name = getattr(file_entry, "name", file_entry)
                 file_name = str(file_name)
