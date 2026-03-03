@@ -1,5 +1,5 @@
-from irods.session import iRODSSession
 import time
+from irods.session import iRODSSession
 
 
 class DelayedSession(iRODSSession):
