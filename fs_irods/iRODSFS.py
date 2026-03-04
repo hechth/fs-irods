@@ -556,16 +556,19 @@ class iRODSFS(FS):
         self._check_exists(src_path)
         self._check_isdir(src_path)
 
-        if self.exists(dst_path) and not overwrite:
+        dest_exists = self.exists(dst_path)
+        if dest_exists and not overwrite:
             raise DestinationExists(dst_path)
-        
+
         metadata = {}
         if preserve_time:
             metadata = self._collect_directory_tree_metadata(src_path)
-        
+
         with self._lock:
+            if dest_exists and overwrite:
+                self._session.collections.remove(self.wrap(dst_path), recurse=True)
             self._session.collections.move(self.wrap(src_path), self.wrap(dst_path))
-        
+
         if metadata is not None:
             self._apply_directory_tree_metadata(dst_path, metadata)
 
@@ -591,6 +594,11 @@ class iRODSFS(FS):
             # Collect metadata for files
             for file_entry in files:
                 self._collect_entry_metadata(path, rel, file_entry, metadata)
+        # Capture metadata for the root directory itself so its modification time can be restored
+        root_info = self.getinfo(src_path, namespaces=["details"])
+        root_modified = root_info.raw.get("details", {}).get("modified")
+        if root_modified is not None:
+            metadata[""] = root_modified
         return metadata
 
     def _collect_entry_metadata(self, path: str, rel: str, entry, metadata: dict) -> None:
