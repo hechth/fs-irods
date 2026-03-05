@@ -356,7 +356,7 @@ class iRODSFS(FS):
             ValueError: If field values are invalid.
         """
         self._check_exists(path)
-        
+
         wrapped_path = self.wrap(path)
         meta_dict = {}
 
@@ -373,7 +373,7 @@ class iRODSFS(FS):
                 if not isinstance(comments, str):
                     raise ValueError("'comments' must be a string")
                 meta_dict["dataComments"] = comments
-            
+
         # If there are no fields to set, return early
         if not meta_dict:
             return
@@ -406,7 +406,7 @@ class iRODSFS(FS):
         try:
             ts = int(value)
         except Exception:
-            raise ValueError(f"'{field_name}' must be an integer timestamp")
+            raise ValueError(f"'{field_name}' must be an integer timestamp") from Exception
         if ts < 0:
             raise ValueError(f"'{field_name}' timestamp must be >= 0")
         return ts
@@ -526,7 +526,7 @@ class iRODSFS(FS):
             self._session.data_objects.move(self.wrap(src_path), self.wrap(dst_path))
             if preserve_time:
                 self._preserve_modified_time(src_path, dst_path)
-                
+
     def _preserve_modified_time(self, src_path: str, dst_path: str) -> None:
         """
         Copy the modified time field from src to dst if present
@@ -539,7 +539,7 @@ class iRODSFS(FS):
         modified_time = src_info.raw.get("details", {}).get("modified")
         if modified_time is not None:
             self.setinfo(dst_path, {"details": {"modified": int(modified_time)}})
-        
+
     def movedir(self, src_path: str, dst_path: str, overwrite: bool = False, preserve_time: bool = False) -> None:
         """Move a directory to the specified location
 
@@ -574,7 +574,7 @@ class iRODSFS(FS):
 
     def _collect_directory_tree_metadata(self, src_path: str) -> dict:
         """Recursively collect modification time metadata for all files and directories in a directory tree.
-        
+
         Args:
             src_path (str): Root directory to collect metadata from
             
@@ -583,7 +583,7 @@ class iRODSFS(FS):
         """
         metadata = {}
         walker = Walker(self)
-        
+
         for path, dirs, files in walker.walk(self, path=src_path, namespaces=["details"]):
             rel = os.path.relpath(path, src_path)
             if rel == ".":
@@ -612,10 +612,10 @@ class iRODSFS(FS):
         """
         entry_name = getattr(entry, "name", entry)
         entry_name = str(entry_name)
-        
+
         src_entry = os.path.join(path, entry_name)
         rel_entry = os.path.join(rel, entry_name) if rel else entry_name
-        
+
         info = self.getinfo(src_entry, namespaces=["details"])
         modified_time = info.raw.get("details", {}).get("modified")
         if modified_time is not None:
@@ -676,7 +676,7 @@ class iRODSFS(FS):
             DirectoryExpected: If ``src_path`` is not a directory.
         """
         self._check_isdir(src_path)
-        
+
         src_basename = os.path.basename(src_path)
         dst = os.path.join(dst_path, src_basename)
 
@@ -693,7 +693,7 @@ class iRODSFS(FS):
             rel = os.path.relpath(path, src_path)
             if rel == ".":
                 rel = ""
-    
+
             target_dir = os.path.join(dst, rel) if rel else dst
             for dir_entry in dirs:
                 dir_name = getattr(dir_entry, "name", dir_entry)
