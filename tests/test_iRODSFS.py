@@ -203,23 +203,14 @@ def test_removedir_exceptions(fs: iRODSFS, path: str, exception: type):
     ],
 )
 def test_copydir(fs: iRODSFS, src_path: str, dst_path: str, create: bool, preserve_time: bool):
-    # Record original modified times if preserve_time is True
-    original_modified = None
-    if preserve_time:
-        src_file = os.path.join(src_path, "existing_file.txt")
-        original_info = fs.getinfo(src_file, namespaces=["details"])
-        original_modified = original_info.raw["details"]["modified"]
-
     fs.copydir(src_path, dst_path, create, preserve_time=preserve_time)
     result_path = os.path.join(dst_path, os.path.basename(src_path))
-
     assert fs.isdir(result_path)
 
+    # ensure all entries were copied (order-independent)
     src_entries = list(fs.scandir(src_path))
     dst_entries = list(fs.scandir(result_path))
-
-    # compare names
-    assert [e.name for e in src_entries] == [e.name for e in dst_entries]
+    assert sorted(e.name for e in src_entries) == sorted(e.name for e in dst_entries)
 
     # ensure file contents were copied
     for entry in src_entries:
@@ -227,11 +218,19 @@ def test_copydir(fs: iRODSFS, src_path: str, dst_path: str, create: bool, preser
             src_file = os.path.join(src_path, entry.name)
             dst_file = os.path.join(result_path, entry.name)
             assert fs.readbytes(src_file) == fs.readbytes(dst_file)
-
-            # Check preserve_time if enabled
             if preserve_time:
+                src_info = fs.getinfo(src_file, namespaces=["details"])
                 dst_info = fs.getinfo(dst_file, namespaces=["details"])
-                assert dst_info.raw["details"]["modified"] == original_modified
+                assert dst_info.raw["details"]["modified"] == src_info.raw["details"]["modified"]
+        elif entry.is_dir:
+            src_dir = os.path.join(src_path, entry.name)
+            dst_dir = os.path.join(result_path, entry.name)
+            assert fs.isdir(src_dir) and fs.isdir(dst_dir)
+            # when preserving time, ensure the directory modified times match
+            if preserve_time:
+                src_info = fs.getinfo(src_dir, namespaces=["details"])
+                dst_info = fs.getinfo(dst_dir, namespaces=["details"])
+                assert dst_info.raw["details"]["modified"] == src_info.raw["details"]["modified"]
 
     # Clean up result_path and parent if it was created
     fs.removetree(result_path)
