@@ -528,8 +528,7 @@ class iRODSFS(FS):
                 self._preserve_modified_time(src_path, dst_path)
 
     def _preserve_modified_time(self, src_path: str, dst_path: str) -> None:
-        """
-        Copy the modified time field from src to dst if present
+        """Copy the modified time field from src to dst if present
         
         Args:
             src_path (str): Source path to copy modified time from
@@ -686,8 +685,11 @@ class iRODSFS(FS):
             else:
                 raise ResourceNotFound(dst_path)
 
-        walker = Walker(self)
+        metadata = {}
+        if preserve_time:
+            metadata = self._collect_directory_tree_metadata(src_path)
 
+        walker = Walker(self)
         for path, dirs, files in walker.walk(self, path=src_path, namespaces=["details"]):
 
             rel = os.path.relpath(path, src_path)
@@ -700,15 +702,15 @@ class iRODSFS(FS):
                 dir_name = str(dir_name)
                 dst_dir = os.path.join(target_dir, dir_name)
                 self.makedirs(dst_dir, recreate=True)
-                if preserve_time:
-                    src_dir = os.path.join(path, dir_name)
-                    self._preserve_modified_time(src_dir, dst_dir)
             for file_entry in files:
                 file_name = getattr(file_entry, "name", file_entry)
                 file_name = str(file_name)
                 src_file = os.path.join(path, file_name)
                 dst_file = os.path.join(target_dir, file_name)
-                self.copy(src_file, dst_file, overwrite=True, preserve_time=preserve_time)
+                self.copy(src_file, dst_file, overwrite=True)
+
+        if metadata is not None:
+            self._apply_directory_tree_metadata(dst, metadata)
 
     def upload(self, path: str, file: io.IOBase | str, chunk_size: int | None = None, **options):
         """Set a file to the contents of a binary file object.
