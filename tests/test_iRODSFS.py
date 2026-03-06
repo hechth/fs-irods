@@ -207,12 +207,10 @@ def test_copydir(fs: iRODSFS, src_path: str, dst_path: str, create: bool, preser
     result_path = os.path.join(dst_path, os.path.basename(src_path))
     assert fs.isdir(result_path)
 
-    # ensure all entries were copied (order-independent)
     src_entries = list(fs.scandir(src_path))
     dst_entries = list(fs.scandir(result_path))
     assert sorted(e.name for e in src_entries) == sorted(e.name for e in dst_entries)
 
-    # ensure file contents were copied
     for entry in src_entries:
         if entry.is_file:
             src_file = os.path.join(src_path, entry.name)
@@ -225,14 +223,16 @@ def test_copydir(fs: iRODSFS, src_path: str, dst_path: str, create: bool, preser
         elif entry.is_dir:
             src_dir = os.path.join(src_path, entry.name)
             dst_dir = os.path.join(result_path, entry.name)
-            assert fs.isdir(src_dir) and fs.isdir(dst_dir)
-            # when preserving time, ensure the directory modified times match
             if preserve_time:
                 src_info = fs.getinfo(src_dir, namespaces=["details"])
                 dst_info = fs.getinfo(dst_dir, namespaces=["details"])
                 assert dst_info.raw["details"]["modified"] == src_info.raw["details"]["modified"]
 
-    # Clean up result_path and parent if it was created
+    if preserve_time:
+        src_info = fs.getinfo(src_path, namespaces=["details"])
+        dst_info = fs.getinfo(result_path, namespaces=["details"])
+        assert dst_info.raw["details"]["modified"] == src_info.raw["details"]["modified"]
+
     fs.removetree(result_path)
     if create and fs.exists(dst_path):
         fs.removetree(dst_path)
@@ -255,7 +255,6 @@ def test_copydir_empty_directory(fs: iRODSFS):
     src_empty = "/tempZone/empty_collection_for_copy"
     dst_parent = "/tempZone"
 
-    # create empty source
     if fs.exists(src_empty):
         fs.removetree(src_empty)
     fs.makedirs(src_empty)
@@ -264,7 +263,6 @@ def test_copydir_empty_directory(fs: iRODSFS):
         fs.copydir(src_empty, dst_parent, create=False)
         result_path = os.path.join(dst_parent, os.path.basename(src_empty))
         assert fs.isdir(result_path)
-        # copied directory should be empty
         assert fs.isempty(result_path)
     finally:
         if fs.exists(src_empty):
@@ -280,13 +278,12 @@ def test_copydir_overwrite_behavior(fs: iRODSFS):
         fs.makedirs(dst_parent)
         dst_existing = os.path.join(dst_parent, os.path.basename(src))
 
-        # ensure destination exists and contains a differing file
         if not fs.isdir(dst_existing):
             fs.makedirs(dst_existing)
-        fs.writetext(os.path.join(dst_existing, "existing_file.txt"), "OLD")
+        fs.writetext(os.path.join(dst_existing, "existing_file.txt"), "old content")
 
         fs.copydir(src, dst_parent, create=False)
-        # copydir uses overwrite=True when copying files
+
         dst_file = os.path.join(dst_existing, "existing_file.txt")
         assert fs.readtext(dst_file) == "content"
     finally:
@@ -294,32 +291,51 @@ def test_copydir_overwrite_behavior(fs: iRODSFS):
             fs.removetree(dst_parent)
 
 
-def test_copydir_nested_structure(fs: iRODSFS):
-    src = "/tempZone/testsrc_nested"
-    dst_parent = "/tempZone/nested_dst"
-
-    # clean up any existing
-    if fs.exists(src):
-        fs.removetree(src)
+@pytest.mark.parametrize(
+    "src_path, dst_parent, create, preserve_time",
+    [
+        ["/tempZone/testsrc_nested", "/tempZone/nested_dst", True, False],
+        ["/tempZone/testsrc_nested", "/tempZone/nested_dst", True, True],
+    ],
+)
+def test_copydir_nested_structure(fs: iRODSFS, src_path: str, dst_parent: str, create: bool, preserve_time: bool):
+    if fs.exists(src_path):
+        fs.removetree(src_path)
     if fs.exists(dst_parent):
         fs.removetree(dst_parent)
 
-    # build nested structure
-    fs.makedirs(os.path.join(src, "a/b"))
-    fs.writetext(os.path.join(src, "a", "file1.txt"), "one")
-    fs.writetext(os.path.join(src, "a", "b", "file2.txt"), "two")
+    fs.makedirs(os.path.join(src_path, "a/b"))
+    fs.writetext(os.path.join(src_path, "a", "file1.txt"), "one")
+    fs.writetext(os.path.join(src_path, "a", "b", "file2.txt"), "two")
+
+    src_info = fs.getinfo(src_path, namespaces=["details"])
+    src_root_modified = src_info.raw["details"]["modified"]
+    file_info = fs.getinfo(os.path.join(src_path, "a", "file1.txt"), namespaces=["details"])
+    file_modified = file_info.raw["details"]["modified"]
+    subdir_info = fs.getinfo(os.path.join(src_path, "a", "b"), namespaces=["details"])
+    subdir_modified = subdir_info.raw["details"]["modified"]
+    nested_file_info = fs.getinfo(os.path.join(src_path, "a", "b", "file2.txt"), namespaces=["details"])
+    nested_file_modified = nested_file_info.raw["details"]["modified"]
 
     try:
-        fs.makedirs(dst_parent, recreate=True)
-        fs.copydir(src, dst_parent, create=True)
-        result = os.path.join(dst_parent, os.path.basename(src))
+        fs.copydir(src_path, dst_parent, create=create, preserve_time=preserve_time)
+        result = os.path.join(dst_parent, os.path.basename(src_path))
         assert fs.isdir(os.path.join(result, "a"))
         assert fs.isdir(os.path.join(result, "a", "b"))
         assert fs.readtext(os.path.join(result, "a", "file1.txt")) == "one"
         assert fs.readtext(os.path.join(result, "a", "b", "file2.txt")) == "two"
+        if preserve_time:
+            dst_info = fs.getinfo(result, namespaces=["details"])
+            assert dst_info.raw["details"]["modified"] == src_root_modified
+            dst_file_info = fs.getinfo(os.path.join(result, "a", "file1.txt"), namespaces=["details"])
+            assert dst_file_info.raw["details"]["modified"] == file_modified
+            dst_subdir_info = fs.getinfo(os.path.join(result, "a", "b"), namespaces=["details"])
+            assert dst_subdir_info.raw["details"]["modified"] == subdir_modified
+            dst_nested_file_info = fs.getinfo(os.path.join(result, "a", "b", "file2.txt"), namespaces=["details"])
+            assert dst_nested_file_info.raw["details"]["modified"] == nested_file_modified        
     finally:
-        if fs.exists(src):
-            fs.removetree(src)
+        if fs.exists(src_path):
+            fs.removetree(src_path)
         if fs.exists(dst_parent):
             fs.removetree(dst_parent)
 
