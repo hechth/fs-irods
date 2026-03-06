@@ -587,13 +587,11 @@ class iRODSFS(FS):
             rel = os.path.relpath(path, src_path)
             if rel == ".":
                 rel = ""
-            # Collect metadata for directories
             for dir_entry in dirs:
                 self._collect_entry_metadata(path, rel, dir_entry, metadata)
-            # Collect metadata for files
             for file_entry in files:
                 self._collect_entry_metadata(path, rel, file_entry, metadata)
-        # Capture metadata for the root directory itself so its modification time can be restored
+        # Capture metadata for the root directory
         root_info = self.getinfo(src_path, namespaces=["details"])
         root_modified = root_info.raw.get("details", {}).get("modified")
         if root_modified is not None:
