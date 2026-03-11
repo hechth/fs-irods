@@ -55,6 +55,8 @@ class iRODSFS(FS):
         self._root = root if root else self._zone
 
     def wrap(self, path: str) -> str:
+        if path == "/":
+            return path
         return str(iRODSPath(self._root, path))
 
     def parent(self, path: str):
@@ -86,7 +88,7 @@ class iRODSFS(FS):
             if self._session.data_objects.exists(path):
                 data_object = self._session.data_objects.get(path)
                 raw_info["basic"]["is_dir"] = False
-                raw_info["details"] = {"type": data_object.type}
+                raw_info["details"] = {"type": 2}
                 raw_info["details"]["size"] = data_object.size
                 raw_info["details"]["checksum"] = data_object.checksum
                 raw_info["details"]["comments"] = data_object.comments
@@ -94,7 +96,7 @@ class iRODSFS(FS):
             elif self._session.collections.exists(path):
                 data_object = self._session.collections.get(path)
                 raw_info["basic"]["is_dir"] = True
-                raw_info["details"] = {"type": "directory"}
+                raw_info["details"] = {"type": 1}
 
             raw_info["basic"]["name"] = data_object.name
             raw_info["access"]["user"] = data_object.owner_name
