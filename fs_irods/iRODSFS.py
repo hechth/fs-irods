@@ -40,6 +40,8 @@ _utc = datetime.timezone(datetime.timedelta(0))
 
 
 class iRODSFS(FS):
+    _meta = {"invalid_path_chars": "\0",}
+
     def __init__(self, session: iRODSSession, root: str | None = None) -> None:
         super().__init__()
         self._lock = RLock()
@@ -197,6 +199,7 @@ class iRODSFS(FS):
                 is specified (``x`` in the mode).
             fs.errors.ResourceNotFound: If the path does not exist.
         """
+        self.validatepath(path)
         fd = super().open(path, mode, buffering, encoding, errors, newline, **options)
         self.files[fd] = self
         return fd
@@ -223,6 +226,7 @@ class iRODSFS(FS):
             FileExpected: If the path is not a file.
             FileExists: If the path exists, and exclusive mode is specified (x in the mode).
         """
+        self.validatepath(path)
         create = can_create(mode)
         if not self.exists(path):
             if not create:
