@@ -55,7 +55,7 @@ class iRODSFS(FS):
         self._root = root if root else self._zone
 
     def wrap(self, path: str) -> str:
-        if path == "/":
+        if path == "/" or path.startswith("/" + self._root):
             return path
         return str(iRODSPath(self._root, path))
 
@@ -519,16 +519,19 @@ class iRODSFS(FS):
             preserve_time (bool, optional): Set to True to preserve the original modification time. Defaults to False.
 
         Raises:
-            ResourceNotFound: If the path does not exist.
+            ResourceNotFound: If the source path does not exist, or if a parent directory of dst_path does not exist.
             FileExpected: If the source path is not a file.
             DestinationExists: If destination path exists and overwrite is False.
         """
         self._check_exists(src_path)
         self._check_isfile(src_path)
+        self._check_points_into_collection(dst_path)
 
         if self.exists(dst_path) and not overwrite:
             raise DestinationExists(dst_path)
         with self._lock:
+            if self.exists(dst_path) and overwrite:
+                self.remove(dst_path)
             self._session.data_objects.move(self.wrap(src_path), self.wrap(dst_path))
             if preserve_time:
                 self._preserve_modified_time(src_path, dst_path)
