@@ -42,7 +42,7 @@ _utc = datetime.timezone(datetime.timedelta(0))
 class iRODSFS(FS):
     _meta = {"invalid_path_chars": "\0",}
 
-    def __init__(self, session: iRODSSession, root: str | None = None) -> None:
+    def __init__(self, session: iRODSSession) -> None:
         super().__init__()
         self._lock = RLock()
         self._host = session.host
@@ -52,12 +52,9 @@ class iRODSFS(FS):
         self._finalizing = False
         self.files = WeakKeyDictionary()
         fses[self] = None
-        self._root = root if root else self._zone
 
     def wrap(self, path: str) -> str:
-        if path == "/" or path.startswith("/" + self._root):
-            return path
-        return str(iRODSPath(self._root, path))
+        return str(iRODSPath(path))
 
     def parent(self, path: str):
         return os.path.dirname(path)
