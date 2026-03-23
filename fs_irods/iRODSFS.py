@@ -567,7 +567,7 @@ class iRODSFS(FS):
 
         metadata = {}
         if preserve_time:
-            metadata = self._collect_directory_tree_metadata(src_path)
+            metadata = self._init_directory_tree_metadata(src_path)
 
         with self._lock:
             if dest_exists and overwrite:
@@ -577,7 +577,7 @@ class iRODSFS(FS):
         if metadata is not None:
             self._apply_directory_tree_metadata(dst_path, metadata)
 
-    def _collect_directory_tree_metadata(self, src_path: str) -> dict:
+    def _init_directory_tree_metadata(self, src_path: str) -> dict:
         """Recursively collect modification time metadata for all files and directories in a directory tree.
 
         Args:
@@ -594,24 +594,25 @@ class iRODSFS(FS):
             if rel == ".":
                 rel = ""
             for dir_entry in dirs:
-                self._collect_entry_metadata(path, rel, dir_entry, metadata)
+                metadata.update(self._collect_entry_metadata(path, rel, dir_entry))
             for file_entry in files:
-                self._collect_entry_metadata(path, rel, file_entry, metadata)
+                metadata.update(self._collect_entry_metadata(path, rel, file_entry))
         # Capture metadata for the root directory
         root_info = self.getinfo(src_path, namespaces=["details"])
         root_modified = root_info.raw.get("details", {}).get("modified")
-        if root_modified is not None:
-            metadata[""] = root_modified
+        metadata[""] = root_modified if root_modified is not None else None
         return metadata
 
-    def _collect_entry_metadata(self, path: str, rel: str, entry, metadata: dict) -> None:
+    def _collect_entry_metadata(self, path: str, rel: str, entry) -> dict:
         """Collect metadata for a file or directory entry.
         
         Args:
             path (str): Current path during traversal
             rel (str): Path relative to source root
             entry: Entry object (file or directory)
-            metadata (dict): Dictionary to store collected metadata
+    
+        Returns:
+            dict: Dictionary containing the entry's metadata, or empty dict if no modified time
         """
         entry_name = getattr(entry, "name", entry)
         entry_name = str(entry_name)
@@ -621,8 +622,7 @@ class iRODSFS(FS):
 
         info = self.getinfo(src_entry, namespaces=["details"])
         modified_time = info.raw.get("details", {}).get("modified")
-        if modified_time is not None:
-            metadata[rel_entry] = modified_time
+        return {rel_entry: modified_time} if modified_time is not None else {}
 
     def _apply_directory_tree_metadata(self, dst_path: str, metadata: dict) -> None:
         """Apply collected metadata to a directory tree at the destination.
@@ -691,7 +691,7 @@ class iRODSFS(FS):
 
         metadata = {}
         if preserve_time:
-            metadata = self._collect_directory_tree_metadata(src_path)
+            metadata = self._init_directory_tree_metadata(src_path)
 
         walker = Walker(self)
         for path, dirs, files in walker.walk(self, path=src_path, namespaces=["details"]):
