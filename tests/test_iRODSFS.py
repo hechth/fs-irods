@@ -217,25 +217,25 @@ def test_copydir(fs: iRODSFS, src_path: str, dst_path: str, create: bool, preser
             dst_file = os.path.join(result_path, entry.name)
             assert fs.readbytes(src_file) == fs.readbytes(dst_file)
             if preserve_time:
-                src_info = fs.getinfo(src_file, namespaces=["details"])
-                dst_info = fs.getinfo(dst_file, namespaces=["details"])
-                assert dst_info.raw["details"]["modified"] == src_info.raw["details"]["modified"]
+                _assert_preserve_time(fs, src_file, dst_file)
         elif entry.is_dir:
             src_dir = os.path.join(src_path, entry.name)
             dst_dir = os.path.join(result_path, entry.name)
             if preserve_time:
-                src_info = fs.getinfo(src_dir, namespaces=["details"])
-                dst_info = fs.getinfo(dst_dir, namespaces=["details"])
-                assert dst_info.raw["details"]["modified"] == src_info.raw["details"]["modified"]
+                _assert_preserve_time(fs, src_dir, dst_dir)
 
     if preserve_time:
-        src_info = fs.getinfo(src_path, namespaces=["details"])
-        dst_info = fs.getinfo(result_path, namespaces=["details"])
-        assert dst_info.raw["details"]["modified"] == src_info.raw["details"]["modified"]
+        _assert_preserve_time(fs, src_path, result_path)
 
     fs.removetree(result_path)
     if create and fs.exists(dst_path):
         fs.removetree(dst_path)
+
+
+def _assert_preserve_time(fs: iRODSFS, src_path: str, dst_path: str):
+    src_info = fs.getinfo(src_path, namespaces=["details"])
+    dst_info = fs.getinfo(dst_path, namespaces=["details"])
+    assert dst_info.raw["details"]["modified"] == src_info.raw["details"]["modified"]
 
 
 @pytest.mark.parametrize(
@@ -308,15 +308,6 @@ def test_copydir_nested_structure(fs: iRODSFS, src_path: str, dst_parent: str, c
     fs.writetext(os.path.join(src_path, "a", "file1.txt"), "one")
     fs.writetext(os.path.join(src_path, "a", "b", "file2.txt"), "two")
 
-    src_info = fs.getinfo(src_path, namespaces=["details"])
-    src_root_modified = src_info.raw["details"]["modified"]
-    file_info = fs.getinfo(os.path.join(src_path, "a", "file1.txt"), namespaces=["details"])
-    file_modified = file_info.raw["details"]["modified"]
-    subdir_info = fs.getinfo(os.path.join(src_path, "a", "b"), namespaces=["details"])
-    subdir_modified = subdir_info.raw["details"]["modified"]
-    nested_file_info = fs.getinfo(os.path.join(src_path, "a", "b", "file2.txt"), namespaces=["details"])
-    nested_file_modified = nested_file_info.raw["details"]["modified"]
-
     try:
         fs.copydir(src_path, dst_parent, create=create, preserve_time=preserve_time)
         result = os.path.join(dst_parent, os.path.basename(src_path))
@@ -325,14 +316,10 @@ def test_copydir_nested_structure(fs: iRODSFS, src_path: str, dst_parent: str, c
         assert fs.readtext(os.path.join(result, "a", "file1.txt")) == "one"
         assert fs.readtext(os.path.join(result, "a", "b", "file2.txt")) == "two"
         if preserve_time:
-            dst_info = fs.getinfo(result, namespaces=["details"])
-            assert dst_info.raw["details"]["modified"] == src_root_modified
-            dst_file_info = fs.getinfo(os.path.join(result, "a", "file1.txt"), namespaces=["details"])
-            assert dst_file_info.raw["details"]["modified"] == file_modified
-            dst_subdir_info = fs.getinfo(os.path.join(result, "a", "b"), namespaces=["details"])
-            assert dst_subdir_info.raw["details"]["modified"] == subdir_modified
-            dst_nested_file_info = fs.getinfo(os.path.join(result, "a", "b", "file2.txt"), namespaces=["details"])
-            assert dst_nested_file_info.raw["details"]["modified"] == nested_file_modified        
+            _assert_preserve_time(fs, src_path, result)
+            _assert_preserve_time(fs, os.path.join(src_path, "a", "file1.txt"), os.path.join(result, "a", "file1.txt"))
+            _assert_preserve_time(fs, os.path.join(src_path, "a", "b"), os.path.join(result, "a", "b"))
+            _assert_preserve_time(fs, os.path.join(src_path, "a", "b", "file2.txt"), os.path.join(result, "a", "b", "file2.txt"))
     finally:
         if fs.exists(src_path):
             fs.removetree(src_path)
@@ -735,13 +722,7 @@ def test_copy(fs: iRODSFS, dst_path: str, result_path: str, overwrite: bool):
 def test_copy_preserve_time(fs: iRODSFS, dst_path: str, result_path: str, overwrite: bool, preserve_time: bool):
     src_path = "/tempZone/existing_file.txt"
     fs.copy(src_path, dst_path, overwrite, preserve_time=preserve_time)
-
-    original_info = fs.getinfo(src_path, namespaces=["details"])
-    original_modified = original_info.raw["details"]["modified"]
-
-    updated_info = fs.getinfo(result_path, namespaces=["details"])
-    assert updated_info.raw["details"]["modified"] == original_modified
-
+    _assert_preserve_time(fs, src_path, result_path)
     fs.remove(result_path)
 
 
