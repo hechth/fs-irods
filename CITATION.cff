@@ -1,18 +1,20 @@
 # YAML 1.2
 ---
 cff-version: "1.2.0"
-title: "fs_irods"
+message: "If you use this software, please cite it using these metadata."
 authors:
-  -
-    family-names: Hecht
-    given-names: Helge
-    orcid: "https://orcid.org/0000-0000-0000-0000"
-date-released: 20??-MM-DD
-doi: <insert your DOI here>
-version: "0.1.0"
+- family-names: Hecht
+  given-names: Helge
+  orcid: https://orcid.org/-0001-6744-996X
+- family-names: Kuo
+  given-names: Chui-Chen
+- family-names: Moore
+  given-names: Daniel W.
+title: "fs_irods"
+version: "0.2.0"
 repository-code: "https://github.com/hechth/fs-irods"
 keywords:
   - PyFilesystem2
   - iRODS
-message: "If you use this software, please cite it using these metadata."
 license: MIT
+date-released: 2026-03-25
