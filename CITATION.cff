@@ -12,7 +12,7 @@ authors:
   given-names: Daniel W.
 title: "fs_irods"
 version: "0.2.0"
-repository-code: "https://github.com/hechth/fs-irods"
+repository-code: "https://github.com/RECETOX/fs-irods"
 keywords:
   - PyFilesystem2
   - iRODS
