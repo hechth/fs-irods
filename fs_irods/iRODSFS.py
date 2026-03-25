@@ -44,7 +44,10 @@ class iRODSFS(FS):
     """iRODS PyFilesystem2 implementation.
     The filesystem needs to be connected to an iRODS server via a sesseion, using valid login information.
     """
-    _meta = {"invalid_path_chars": "\0",}
+
+    _meta = {
+        "invalid_path_chars": "\0",
+    }
 
     def __init__(self, session: iRODSSession):
         """Constructor for the filesystem.
@@ -367,11 +370,13 @@ class iRODSFS(FS):
 
     def setinfo(self, path: str, info: dict) -> None:
         """Set metadata for a file or directory.
+
         Args:
             path (str): Path to a file or directory on the filesystem.
-            info (dict): Dictionary with metadata. Format: 
-            {"details": {"modified": <int>, "created": <int>, 
+            info (dict): Dictionary with metadata. Format:
+            {"details": {"modified": <int>, "created": <int>,
                     "expiry": <str>, "comments": <str>}}
+
         Raises:
             ResourceNotFound: If the path does not exist.
             ValueError: If field values are invalid.
@@ -402,25 +407,22 @@ class iRODSFS(FS):
         with self._lock:
             # Use modDataObjMeta for files and touch for collections (directories)
             if self.isfile(path):
-                self._session.data_objects.modDataObjMeta(
-                    {"objPath": wrapped_path},
-                    meta_dict
-                )
+                self._session.data_objects.modDataObjMeta({"objPath": wrapped_path}, meta_dict)
             elif self.isdir(path):
                 # For collections, use touch to update modification time
                 if "dataModify" in meta_dict:
-                    self._session.collections.touch(
-                        wrapped_path,
-                        seconds_since_epoch=meta_dict["dataModify"]
-                    )
+                    self._session.collections.touch(wrapped_path, seconds_since_epoch=meta_dict["dataModify"])
 
     def _validate_and_format_timestamp(self, value, field_name: str) -> int:
         """Validate that `value` can be parsed as a non-negative int timestamp.
+
         Args:
             value (dict): The value to validate and format.
             field_name (str): The name of the field being validated (for error messages).
+
         Returns:
             int: The integer timestamp.
+
         Raises:
             ValueError: If `value` is not an integer or is negative.
         """
@@ -552,8 +554,8 @@ class iRODSFS(FS):
                 self._preserve_modified_time(src_path, dst_path)
 
     def _preserve_modified_time(self, src_path: str, dst_path: str) -> None:
-        """Copy the modified time field from src to dst if present
-        
+        """Copy the modified time field from src to dst if present.
+
         Args:
             src_path (str): Source path to copy modified time from
             dst_path (str): Destination path to copy modified time to
@@ -564,13 +566,14 @@ class iRODSFS(FS):
             self.setinfo(dst_path, {"details": {"modified": int(modified_time)}})
 
     def movedir(self, src_path: str, dst_path: str, overwrite: bool = False, preserve_time: bool = False) -> None:
-        """Move a directory to the specified location
+        """Move a directory to the specified location.
 
         Args:
             src_path (str): Path to the current location of the directory
             dst_path (str): Path to the target location of the directory
             overwrite (bool, optional): Set to True to overwrite an existing destination directory. Defaults to False.
             preserve_time (bool, optional): Set to True to preserve the original modification time. Defaults to False.
+
         Raises:
             ResourceNotFound: If the source path does not exist.
             DirectoryExpected: If the source path is not a directory.
@@ -600,7 +603,7 @@ class iRODSFS(FS):
 
         Args:
             src_path (str): Root directory to collect metadata from
-            
+
         Returns:
             dict: Dictionary mapping relative paths to their modification times
         """
@@ -623,12 +626,12 @@ class iRODSFS(FS):
 
     def _collect_entry_metadata(self, path: str, rel: str, entry) -> dict:
         """Collect metadata for a file or directory entry.
-        
+
         Args:
             path (str): Current path during traversal
             rel (str): Path relative to source root
             entry: Entry object (file or directory)
-    
+
         Returns:
             dict: Dictionary containing the entry's metadata, or empty dict if no modified time
         """
@@ -644,7 +647,7 @@ class iRODSFS(FS):
 
     def _apply_directory_tree_metadata(self, dst_path: str, metadata: dict) -> None:
         """Apply collected metadata to a directory tree at the destination.
-        
+
         Args:
             dst_path (str): Root destination path where metadata should be applied
             metadata (dict): Dictionary mapping relative paths to their modification times
@@ -692,6 +695,7 @@ class iRODSFS(FS):
             dst_path (str): Where to copy the folder to.
             create (bool, optional): Create the target directory if it does not exist. Defaults to False.
             preserve_time (bool, optional): Preserve the modification time. Defaults to False.
+
         Raises:
             ResourceNotFound: If the ``dst_path`` does not exist, and ``create`` is not `True`.
             DirectoryExpected: If ``src_path`` is not a directory.
@@ -713,7 +717,6 @@ class iRODSFS(FS):
 
         walker = Walker(self)
         for path, dirs, files in walker.walk(self, path=src_path, namespaces=["details"]):
-
             rel = os.path.relpath(path, src_path)
             if rel == ".":
                 rel = ""

@@ -13,7 +13,7 @@ class TestMyFS(FSTestCases, unittest.TestCase):
 
     def destroy_fs(self, fs: iRODSFS):
         """Clean up test artifacts without removing root.
-        
+
         Dynamically removes all items in the zone root that are not system
         paths, so no test artifact is ever left behind regardless of what
         individual tests create.

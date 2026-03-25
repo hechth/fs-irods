@@ -319,7 +319,9 @@ def test_copydir_nested_structure(fs: iRODSFS, src_path: str, dst_parent: str, c
             _assert_preserve_time(fs, src_path, result)
             _assert_preserve_time(fs, os.path.join(src_path, "a", "file1.txt"), os.path.join(result, "a", "file1.txt"))
             _assert_preserve_time(fs, os.path.join(src_path, "a", "b"), os.path.join(result, "a", "b"))
-            _assert_preserve_time(fs, os.path.join(src_path, "a", "b", "file2.txt"), os.path.join(result, "a", "b", "file2.txt"))
+            _assert_preserve_time(
+                fs, os.path.join(src_path, "a", "b", "file2.txt"), os.path.join(result, "a", "b", "file2.txt")
+            )
     finally:
         if fs.exists(src_path):
             fs.removetree(src_path)
@@ -634,13 +636,19 @@ def test_movedir_preserve_time_nested(fs: iRODSFS):
         fs.movedir(src, dst, overwrite=True, preserve_time=True)
 
         dst_info = fs.getinfo(dst, namespaces=["details"])
-        assert dst_info.raw["details"]["modified"] == src_root_modified, "Root directory modification time not preserved"
+        assert (
+            dst_info.raw["details"]["modified"] == src_root_modified
+        ), "Root directory modification time not preserved"
         dst_file_info = fs.getinfo(os.path.join(dst, "file.txt"), namespaces=["details"])
         assert dst_file_info.raw["details"]["modified"] == file_modified, "File modification time not preserved"
         dst_subdir_info = fs.getinfo(os.path.join(dst, "subdir"), namespaces=["details"])
-        assert dst_subdir_info.raw["details"]["modified"] == subdir_modified, "Nested directory modification time not preserved"
+        assert (
+            dst_subdir_info.raw["details"]["modified"] == subdir_modified
+        ), "Nested directory modification time not preserved"
         dst_nested_file_info = fs.getinfo(os.path.join(dst, "subdir", "nested_file.txt"), namespaces=["details"])
-        assert dst_nested_file_info.raw["details"]["modified"] == nested_file_modified, "Nested file modification time not preserved"
+        assert (
+            dst_nested_file_info.raw["details"]["modified"] == nested_file_modified
+        ), "Nested file modification time not preserved"
     finally:
         if fs.exists(src):
             fs.removetree(src)
@@ -788,9 +796,12 @@ def test_setinfo_time_fields(fs: iRODSFS, field: str, time_offset: int):
     assert updated_info.raw["details"][field] == new_time
 
 
-@pytest.mark.parametrize("path, exception, field, value", [
-    ["/tempZone/nonexistent_file.txt", ResourceNotFound, "modified", 1000000000],
-])
+@pytest.mark.parametrize(
+    "path, exception, field, value",
+    [
+        ["/tempZone/nonexistent_file.txt", ResourceNotFound, "modified", 1000000000],
+    ],
+)
 def test_setinfo_exceptions(fs: iRODSFS, path: str, exception: Exception, field: str, value):
     """Test that setinfo raises appropriate exceptions for invalid inputs."""
     with pytest.raises(exception):
