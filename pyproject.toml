@@ -29,7 +29,6 @@ python = "^3.9"
 fs = "^2.4.16"
 python-irodsclient = "^3.2.0"
 
-
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.3"
 pytest-cov = "^4.1.0"
@@ -39,6 +38,12 @@ ruff = "^0.1.5"
 pytest-mock = "^3.12.0"
 jupyter = "^1.1.1"
 poetry-bumpversion = "^0.3.3"
+
+[tool.poetry.group.docs.dependencies]
+sphinx =  "*"
+sphinx-rtd-theme =  "*"
+sphinx-autoapi =  "*"
+myst-parser = "*"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
