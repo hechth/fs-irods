@@ -31,7 +31,7 @@ The project setup is documented in [project_setup.md](project_setup.md). Feel fr
 To install fs_irods from GitHub repository, do:
 
 ```console
-git clone git@github.com:hechth/fs-irods.git
+git clone git@github.com:RECETOX/fs-irods.git
 cd fs-irods
 python -m pip install .
 ```
