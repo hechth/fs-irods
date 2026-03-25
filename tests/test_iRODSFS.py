@@ -3,7 +3,14 @@ import time
 from typing import List
 import pytest
 import six
-from fs.errors import *
+from fs.errors import DestinationExists
+from fs.errors import DirectoryExists
+from fs.errors import DirectoryExpected
+from fs.errors import DirectoryNotEmpty
+from fs.errors import FileExists
+from fs.errors import FileExpected
+from fs.errors import RemoveRootError
+from fs.errors import ResourceNotFound
 from fs.walk import Walker
 from fs_irods import iRODSFS
 from tests.iRODSFSBuilder import iRODSFSBuilder
@@ -20,7 +27,7 @@ def assert_bytes(fs: iRODSFS, path: str, contents: bytes):
     assert isinstance(contents, bytes)
     data = fs.readbytes(path)
     assert data == contents
-    assert type(data) == bytes
+    assert isinstance(data, bytes)
 
 
 @pytest.fixture

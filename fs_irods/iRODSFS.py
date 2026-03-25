@@ -42,6 +42,7 @@ _utc = datetime.timezone(datetime.timedelta(0))
 
 class iRODSFS(FS):
     """iRODS PyFilesystem2 implementation.
+
     The filesystem needs to be connected to an iRODS server via a sesseion, using valid login information.
     """
 
@@ -67,6 +68,14 @@ class iRODSFS(FS):
         fses[self] = None
 
     def wrap(self, path: str) -> str:
+        """Transform path into iRODSPath.
+
+        Args:
+            path (str): Path to transform.
+
+        Returns:
+            str: Equivalent iRODSPath.
+        """
         return str(iRODSPath(path))
 
     def parent(self, path: str) -> str:
@@ -168,14 +177,16 @@ class iRODSFS(FS):
             self._session.collections.create(self.wrap(path), recurse=False)
 
     def _finalize_files(self):
+        """Helper function to close file handles."""
         self._finalizing = True
-        l = list(self.files)
-        while l:
-            f = l.pop()
+        file_list = list(self.files)
+        while file_list:
+            f = file_list.pop()
             if not f.closed:
                 f.close()
 
     def __del__(self):
+        """Deconstructor to close all dangling file handles."""
         if not self._finalizing:
             self._finalize_files()
 
@@ -330,6 +341,7 @@ class iRODSFS(FS):
 
     def removetree(self, path: str):
         """Recursively remove a directory and all its contents.
+
         This method is similar to removedir, but will remove the contents of the directory if it is not empty.
 
         Args:
