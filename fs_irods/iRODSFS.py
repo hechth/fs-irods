@@ -30,6 +30,7 @@ _logger = logging.getLogger(__name__)
 
 # Close out dangling file handles.
 def finalize():
+    """Function to close open handles to file systems upon cleanup."""
     for fs in list(fses):
         fs._finalize_files()
 
@@ -40,9 +41,18 @@ _utc = datetime.timezone(datetime.timedelta(0))
 
 
 class iRODSFS(FS):
+    """iRODS PyFilesystem2 implementation.
+    The filesystem needs to be connected to an iRODS server via a sesseion, using valid login information.
+    """
     _meta = {"invalid_path_chars": "\0",}
 
-    def __init__(self, session: iRODSSession) -> None:
+    def __init__(self, session: iRODSSession):
+        """Constructor for the filesystem.
+
+        Args:
+            session (iRODSSession): An open iRODS session with an authenticated user.
+            root (str | None, optional): _description_. Defaults to None.
+        """
         super().__init__()
         self._lock = RLock()
         self._host = session.host
@@ -56,7 +66,15 @@ class iRODSFS(FS):
     def wrap(self, path: str) -> str:
         return str(iRODSPath(path))
 
-    def parent(self, path: str):
+    def parent(self, path: str) -> str:
+        """Get the parent directory of specified path.
+
+        Args:
+            path (str): Path to retrieve parent for.
+
+        Returns:
+            str: Parent directory of the path.
+        """
         return os.path.dirname(path)
 
     def getinfo(self, path: str, namespaces: list | None = None) -> Info:
