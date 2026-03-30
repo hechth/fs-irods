@@ -43,4 +43,4 @@ class iRODSFSBuilder:
         return self
 
     def build(self):
-        return iRODSFS(self._session)
+        return iRODSFS(self._session, self._root)

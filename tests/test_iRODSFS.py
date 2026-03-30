@@ -32,7 +32,7 @@ def assert_bytes(fs: iRODSFS, path: str, contents: bytes):
 
 @pytest.fixture
 def fs():
-    builder: iRODSFSBuilder = iRODSFSBuilder()
+    builder: iRODSFSBuilder = iRODSFSBuilder().with_root("/")
     sut = builder.build()
 
     if not sut.exists("/tempZone/existing_file.txt"):
