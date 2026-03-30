@@ -50,7 +50,7 @@ class iRODSFS(FS):
         "invalid_path_chars": "\0",
     }
 
-    def __init__(self, session: iRODSSession):
+    def __init__(self, session: iRODSSession, root: str | None = None):
         """Constructor for the filesystem.
 
         Args:
@@ -66,6 +66,7 @@ class iRODSFS(FS):
         self._finalizing = False
         self.files = WeakKeyDictionary()
         fses[self] = None
+        self._root = root if root is not None else self._zone
 
     def wrap(self, path: str) -> str:
         """Transform path into iRODSPath.
@@ -76,7 +77,7 @@ class iRODSFS(FS):
         Returns:
             str: Equivalent iRODSPath.
         """
-        return str(iRODSPath(path))
+        return str(iRODSPath(self._root, path))
 
     def parent(self, path: str) -> str:
         """Get the parent directory of specified path.
